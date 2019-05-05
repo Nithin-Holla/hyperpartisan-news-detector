@@ -1,8 +1,14 @@
 import torch
 from torch import nn, optim
+from torch.utils.data import DataLoader
+
 import torchtext
 import argparse
 import os
+
+from datasets.metaphor_dataset import MetaphorDataset
+from helpers.metaphor_loader import MetaphorLoader
+from helpers.data_helper import DataHelper
 from model.HierarchicalAttentionNetwork import HierarchicalAttentionNetwork
 
 
@@ -25,6 +31,7 @@ def train_model(config):
     glove_vectors = torchtext.vocab.Vectors(name=config.vector_file_name,
                                             cache=config.vector_cache_dir,
                                             max_vectors=config.glove_size)
+
     vocab_size = len(glove_vectors.vectors)
 
     # Define the model, the optimizer and the loss module
@@ -48,9 +55,25 @@ def train_model(config):
         start_epoch = 1
         print("Training the model from scratch...")
 
-    # Initialize dataloaders
+    # Load hyperpartisan data
     hyperpartisan_dataloader = None
-    metaphor_dataloader = None
+
+    # Load metaphor data
+    metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
+        metaphor_dataset_folder=config.metaphor_dataset_folder,
+        embedding_vector=glove_vectors,
+        embedding_dimension=config.embedding_dimension)
+
+    metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader = DataHelper.create_dataloaders(
+        train_dataset=metaphor_train_dataset,
+        validation_dataset=metaphor_validation_dataset,
+        test_dataset=metaphor_test_dataset,
+        batch_size=config.batch_size,
+        shuffle=True)
+
+    for step, (batch_inputs, batch_targets, batch_lengths) in enumerate(metaphor_train_dataloader):
+        # TODO
+        pass
 
 
 if __name__ == '__main__':
@@ -63,6 +86,8 @@ if __name__ == '__main__':
                         help='File in which vectors are saved')
     parser.add_argument('--vector_cache_dir', type=str, default='.vector_cache',
                         help='Directory where vectors would be cached')
+    parser.add_argument('--embedding_dimension', type=int, default=300,
+                        help='Dimensions of the vector embeddings')
     parser.add_argument('--learning_rate', type=float, default=0.01,
                         help='Learning rate')
     parser.add_argument('--max_epochs', type=int, default=5,
@@ -75,6 +100,9 @@ if __name__ == '__main__':
                         help='Number of GloVe vectors to load initially')
     parser.add_argument('--weight_decay', type=float, default=0,
                         help='Weight decay for the optimizer')
+    parser.add_argument('--metaphor_dataset_folder', type=str,
+                        help='Path to the metaphor dataset')
+
     config = parser.parse_args()
 
     train_model(config)
