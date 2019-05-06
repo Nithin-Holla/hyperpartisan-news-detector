@@ -70,9 +70,9 @@ def train_model(config):
         batch_size=config.batch_size,
         shuffle=True)
 
-    for step, (batch_inputs, batch_targets, batch_lengths) in enumerate(metaphor_train_dataloader):
-        # TODO
-        pass
+    for epochs in range(start_epoch, config.max_epochs + 1):
+        for step, (batch_inputs, batch_targets, batch_lengths) in enumerate(metaphor_train_dataloader):
+            pass
 
 
 if __name__ == '__main__':
