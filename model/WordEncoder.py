@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-
+from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 class WordEncoder(nn.Module):
 
@@ -18,7 +18,7 @@ class WordEncoder(nn.Module):
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.zeros((2 * hidden_dim, 1)))
 
-    def forward(self, x):
+    def forward(self, x, len_x):
         embed = self.embedding(x)
         out, hidden = self.encoder(embed)   # slice and reorder out later
         pre_attn = self.pre_attn(out)

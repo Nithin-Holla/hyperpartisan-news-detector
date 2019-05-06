@@ -15,7 +15,7 @@ class JointModel(nn.Module):
         self.hyperpartisan_fc = nn.Linear(hidden_dim, hyp_n_classes)
         self.tasks = ['hyperpartisan', 'metaphor']
 
-    def forward(self, x, task):
+    def forward(self, x, len_x, task):
         assert task in self.tasks
         if task == 'hyperpartisan':
             sent_embeddings = []
@@ -27,6 +27,6 @@ class JointModel(nn.Module):
             out = self.hyperpartisan_fc(doc_embedding)
             return out
         elif task == 'metaphor':
-            sent_embed = self.word_encoder(x)
+            sent_embed = self.word_encoder(x, len_x)
             out = self.metaphor_fc(sent_embed)
             return out
