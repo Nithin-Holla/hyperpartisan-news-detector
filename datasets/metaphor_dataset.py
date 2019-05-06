@@ -12,7 +12,7 @@ import torch.nn as nn
 import csv
 import ast
 from typing import List, Tuple, Dict, Set
-from nltk.tokenize import word_tokenize
+from nltk.tokenize import WhitespaceTokenizer
 
 
 class MetaphorDataset(data.Dataset):
@@ -25,15 +25,18 @@ class MetaphorDataset(data.Dataset):
 
         self._data_size = len(self._sentences)
         self.word_vector = word_vector
+        self.tokenizer = WhitespaceTokenizer()
 
     def __getitem__(self, idx):
         sentence = self._sentences[idx]
 
-        words = word_tokenize(sentence.lower())
+        words = self.tokenizer.tokenize(sentence.lower())
         indexed_sequence = [self.word_vector.stoi.get(x, 0) for x in words]
         targets = self._labels[idx]
+        sentence_length = len(indexed_sequence)
 
-        sentence_length = len(words)
+        assert sentence_length == len(targets), 'Length of sentence tokens is not the same as the length of the targets'
+
         return indexed_sequence, targets, sentence_length
 
     def __len__(self):
