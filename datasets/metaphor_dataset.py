@@ -12,6 +12,7 @@ import torch.nn as nn
 import csv
 import ast
 from typing import List, Tuple, Dict, Set
+from nltk.tokenize import word_tokenize
 
 
 class MetaphorDataset(data.Dataset):
@@ -28,7 +29,7 @@ class MetaphorDataset(data.Dataset):
     def __getitem__(self, idx):
         sentence = self._sentences[idx]
 
-        words = sentence.split()
+        words = word_tokenize(sentence.lower())
         indexed_sequence = [self.word_vector.stoi.get(x, -1) for x in words]
         targets = self._labels[idx]
 
