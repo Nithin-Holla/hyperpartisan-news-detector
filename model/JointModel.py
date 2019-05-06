@@ -11,7 +11,8 @@ class JointModel(nn.Module):
         super(JointModel, self).__init__()
         self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim, pretrained_vectors)
         self.sentence_encoder = SentenceEncoder(hidden_dim, hidden_dim)
-        self.metaphor_fc = nn.Linear(hidden_dim, 1)
+        self.metaphor_fc = nn.Sequential(nn.Linear(hidden_dim, 1),
+                                         nn.Softmax())
         self.hyperpartisan_fc = nn.Linear(hidden_dim, hyp_n_classes)
         self.tasks = ['hyperpartisan', 'metaphor']
 

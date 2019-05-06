@@ -13,7 +13,7 @@ class WordEncoder(nn.Module):
         if pretrained_vectors is not None:
             self.embedding.weight.data.copy_(pretrained_vectors)
         self.embedding.requires_grad = False  # Fixed embedding or fine-tuned?
-        self.encoder = nn.GRU(embedding_dim, hidden_dim, bidirectional=True)
+        self.encoder = nn.GRU(embedding_dim, hidden_dim, bidirectional=True, batch_first=True)
         self.pre_attn = nn.Sequential(nn.Linear(2 * hidden_dim, 2 * hidden_dim),
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.zeros((2 * hidden_dim, 1)))
