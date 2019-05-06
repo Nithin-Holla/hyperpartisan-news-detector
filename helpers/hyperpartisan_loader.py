@@ -13,7 +13,7 @@ class HyperpartisanLoader():
 	def get_hyperpartisan_datasets(
 			hyperpartisan_dataset_folder: str,
 			word_vector: Vectors,
-			use_data: list) -> Tuple[HyperpartisanDataset, HyperpartisanDataset, HyperpartisanDataset]:
+			use_data: list = [10**6, 10**6, 10**6]) -> Tuple[HyperpartisanDataset, HyperpartisanDataset, HyperpartisanDataset]:
 		'''
 		Parses the hyperpartisan files and creates HyperpartisanDataset objects which
 		include information about the vocabulary and the embedding of the sentences
