@@ -9,7 +9,7 @@ import os
 from datasets.metaphor_dataset import MetaphorDataset
 from helpers.metaphor_loader import MetaphorLoader
 from helpers.data_helper import DataHelper
-from model.HierarchicalAttentionNetwork import HierarchicalAttentionNetwork
+from model.JointModel import JointModel
 
 
 def train_model(config):
@@ -35,11 +35,11 @@ def train_model(config):
     vocab_size = len(glove_vectors.vectors)
 
     # Define the model, the optimizer and the loss module
-    model = HierarchicalAttentionNetwork(vocab_size=vocab_size,
-                                         embedding_dim=glove_vectors.dim,
-                                         hidden_dim=config.hidden_dim,
-                                         num_classes=2,
-                                         pretrained_vectors=glove_vectors.vectors).to(device)
+    model = JointModel(vocab_size=vocab_size,
+                       embedding_dim=glove_vectors.dim,
+                       hidden_dim=config.hidden_dim,
+                       hyp_n_classes=2,
+                       pretrained_vectors=glove_vectors.vectors).to(device)
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
                           lr=config.learning_rate, weight_decay=config.weight_decay)
     cross_entropy_loss = nn.CrossEntropyLoss()
