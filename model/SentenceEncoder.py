@@ -16,7 +16,8 @@ class SentenceEncoder(nn.Module):
     def forward(self, x):
         out, hidden = self.encoder(x)   # slice and reorder out later
         pre_attn = self.pre_attn(out)
-        attn_weights = torch.softmax(pre_attn @ self.context_vector)
-        document_embed = torch.sum(attn_weights * out)
+        attn_weights = torch.softmax(pre_attn @ self.context_vector, dim=1)
+        attn_weights = attn_weights.expand_as(out)
+        document_embed = torch.sum(attn_weights * out, dim=1)
         return document_embed
 

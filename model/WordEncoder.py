@@ -17,12 +17,21 @@ class WordEncoder(nn.Module):
         self.pre_attn = nn.Sequential(nn.Linear(2 * hidden_dim, 2 * hidden_dim),
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.zeros((2 * hidden_dim, 1)))
+        self.metaphor_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
+                                         nn.Softmax())
+        self.tasks = ['hyperpartisan', 'metaphor']
 
-    def forward(self, x, len_x):
+    def forward(self, x, len_x, task):
+        assert task in self.tasks
         embed = self.embedding(x)
         out, hidden = self.encoder(embed)   # slice and reorder out later
-        pre_attn = self.pre_attn(out)
-        attn_weights = torch.softmax(pre_attn @ self.context_vector)
-        sentence_embed = torch.sum(attn_weights * out)
-        return sentence_embed
+        if task == 'hyperpartisan':
+            pre_attn = self.pre_attn(out)
+            attn_weights = torch.softmax(pre_attn @ self.context_vector, dim=1)
+            attn_weights = attn_weights.expand_as(out)
+            sentence_embed = torch.sum(attn_weights * out, dim=1)
+            return sentence_embed
+        elif task == 'metaphor':
+            pred = self.metaphor_fc(out)
+            return pred
 
