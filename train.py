@@ -44,7 +44,7 @@ def train_model(config):
                        pretrained_vectors=glove_vectors.vectors).to(device)
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
                           lr=config.learning_rate, weight_decay=config.weight_decay)
-    cross_entropy_loss = nn.CrossEntropyLoss()
+    metaphor_criterion = nn.BCELoss()
 
     # Load the checkpoint if found
     if os.path.isfile(config.checkpoint_path):
@@ -82,8 +82,13 @@ def train_model(config):
         shuffle=True)
 
     for epochs in range(start_epoch, config.max_epochs + 1):
-        for step, (batch_inputs, batch_targets, batch_lengths) in enumerate(metaphor_train_dataloader):
-            pass
+        for step, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
+            optimizer.zero_grad()
+            pred = model(m_batch_inputs, m_batch_lengths, task='metaphor')
+            loss = metaphor_criterion(pred, m_batch_targets)
+            loss.backward()
+            optimizer.step()
+            print("Loss = ", loss.item())
 
 
 if __name__ == '__main__':
