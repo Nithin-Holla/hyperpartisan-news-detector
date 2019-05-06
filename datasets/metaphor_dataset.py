@@ -30,7 +30,7 @@ class MetaphorDataset(data.Dataset):
         sentence = self._sentences[idx]
 
         words = word_tokenize(sentence.lower())
-        indexed_sequence = [self.word_vector.stoi.get(x, -1) for x in words]
+        indexed_sequence = [self.word_vector.stoi.get(x, 0) for x in words]
         targets = self._labels[idx]
 
         sentence_length = len(words)
