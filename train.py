@@ -6,6 +6,8 @@ import torchtext
 import argparse
 import os
 
+from datasets.hyperpartisan_dataset import HyperpartisanDataset
+from helpers.hyperpartisan_loader import HyperpartisanLoader
 from datasets.metaphor_dataset import MetaphorDataset
 from helpers.metaphor_loader import MetaphorLoader
 from helpers.data_helper import DataHelper
@@ -56,7 +58,16 @@ def train_model(config):
         print("Training the model from scratch...")
 
     # Load hyperpartisan data
-    hyperpartisan_dataloader = None
+    hyperpartisan_train_dataset, hyperpartisan_validation_dataset, hyperpartisan_test_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
+        hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
+        word_vector=glove_vectors)
+
+    hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, hyperpartisan_test_dataloader = DataHelper.create_dataloaders(
+        train_dataset=hyperpartisan_train_dataset,
+        validation_dataset=hyperpartisan_validation_dataset,
+        test_dataset=hyperpartisan_test_dataset,
+        batch_size=config.batch_size,
+        shuffle=True)
 
     # Load metaphor data
     metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
