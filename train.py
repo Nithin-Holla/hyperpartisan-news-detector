@@ -61,7 +61,7 @@ def train_model(config):
     # Load metaphor data
     metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
         metaphor_dataset_folder=config.metaphor_dataset_folder,
-        embedding_vector=glove_vectors)
+        word_vector=glove_vectors)
 
     metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader = DataHelper.create_dataloaders(
         train_dataset=metaphor_train_dataset,
