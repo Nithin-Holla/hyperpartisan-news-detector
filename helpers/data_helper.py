@@ -74,7 +74,7 @@ class DataHelper():
         sequences, targets, lengths = batch_split[0], batch_split[1], batch_split[2]
         max_length = max(lengths)
 
-        padded_sequences = np.zeros((batch_size, max_length), dtype=np.int32)
+        padded_sequences = np.ones((batch_size, max_length), dtype=np.int32)
         padded_targets = np.zeros((batch_size, max_length), dtype=np.int32) - 1
 
         for i, l in enumerate(lengths):
