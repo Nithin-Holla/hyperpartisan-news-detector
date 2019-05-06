@@ -5,6 +5,7 @@ import torch.utils.data as data
 
 from typing import Tuple
 
+
 class DataHelper():
 
     @classmethod
@@ -72,11 +73,12 @@ class DataHelper():
 
         sequences, targets, lengths = batch_split[0], batch_split[1], batch_split[2]
         max_length = max(lengths)
-        embedding_dimension = sequences[0].shape[1]
 
-        padded_sequences = np.zeros(
-            (batch_size, max_length, embedding_dimension))
+        padded_sequences = np.zeros((batch_size, max_length), dtype=np.int32)
+        padded_targets = np.zeros((batch_size, max_length), dtype=np.int32) - 1
+
         for i, l in enumerate(lengths):
-            padded_sequences[i, 0:l, :] = sequences[i][0:l]
+            padded_sequences[i][0:l] = sequences[i][0:l]
+            padded_targets[i][0:l] = targets[i][0:l]
 
-        return cls._sort_batch(torch.tensor(padded_sequences), torch.tensor(targets).view(-1, 1), torch.tensor(lengths))
+        return cls._sort_batch(torch.from_numpy(padded_sequences), torch.from_numpy(padded_targets), torch.tensor(lengths))
