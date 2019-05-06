@@ -7,7 +7,7 @@ from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from typing import Tuple
 
 
-class MetaphorLoader():
+class HyperpartisanLoader():
 
 	@staticmethod
 	def get_hyperpartisan_datasets(
@@ -15,14 +15,14 @@ class MetaphorLoader():
 			word_vector: Vectors,
 			use_data: list) -> Tuple[HyperpartisanDataset, HyperpartisanDataset, HyperpartisanDataset]:
 		'''
-		Parses the metaphor files and creates MetaphorDataset objects which
+		Parses the hyperpartisan files and creates HyperpartisanDataset objects which
 		include information about the vocabulary and the embedding of the sentences
 
-		:param str metaphor_dataset_folder: The folder where the metaphor dataset files should be
-		:param Vectors word_vector: The vector that will be used to embed the words in the metaphor dataset. It could be GloVe for example
+		:param str hyperpartisan_dataset_folder: The folder where the hyperpartisan dataset files should be
+		:param Vectors word_vector: The vector that will be used to embed the words in the hyperpartisan dataset. It could be GloVe for example
 		'''
 
-		assert os.path.isdir(metaphor_dataset_folder), 'Hyperpartisan dataset folder is not valid'
+		assert os.path.isdir(hyperpartisan_dataset_folder), 'Hyperpartisan dataset folder is not valid'
 
 		# Train
 		train_filepath = os.path.join(hyperpartisan_dataset_folder, 'train.csv')
@@ -30,7 +30,7 @@ class MetaphorLoader():
 
 		# Validation
 		validation_filepath = os.path.join(hyperpartisan_dataset_folder, 'valid.csv')
-		validation_dataset = HyperpartisanMetaphorDataset(validation_filepath, word_vector, use_data = use_data[1])
+		validation_dataset = HyperpartisanDataset(validation_filepath, word_vector, use_data = use_data[1])
 
 		# Test
 		test_filepath = os.path.join(hyperpartisan_dataset_folder, 'test.csv')
