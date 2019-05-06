@@ -11,9 +11,7 @@ class JointModel(nn.Module):
         super(JointModel, self).__init__()
         self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim, pretrained_vectors)
         self.sentence_encoder = SentenceEncoder(hidden_dim, hidden_dim)
-        self.metaphor_fc = nn.Sequential(nn.Linear(hidden_dim, 1),
-                                         nn.Softmax())
-        self.hyperpartisan_fc = nn.Linear(hidden_dim, hyp_n_classes)
+        self.hyperpartisan_fc = nn.Linear(2 * hidden_dim, hyp_n_classes)
         self.tasks = ['hyperpartisan', 'metaphor']
 
     def forward(self, x, len_x, task):
@@ -21,13 +19,12 @@ class JointModel(nn.Module):
         if task == 'hyperpartisan':
             sent_embeddings = []
             for sent in x:
-                sent_embed = self.word_encoder(sent)
+                sent_embed = self.word_encoder(sent, task)
                 sent_embeddings.append(sent_embed)
             sent_embeddings = torch.stack(sent_embeddings)
             doc_embedding = self.sentence_encoder(sent_embeddings)
             out = self.hyperpartisan_fc(doc_embedding)
             return out
         elif task == 'metaphor':
-            sent_embed = self.word_encoder(x, len_x)
-            out = self.metaphor_fc(sent_embed)
+            out = self.word_encoder(x, len_x, task)
             return out

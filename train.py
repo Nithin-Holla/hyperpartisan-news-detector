@@ -83,9 +83,12 @@ def train_model(config):
 
     for epochs in range(start_epoch, config.max_epochs + 1):
         for step, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
+            m_batch_inputs = m_batch_inputs.to(device)
+            m_batch_targets = m_batch_targets.to(device)
+            m_batch_lengths = m_batch_lengths.to(device)
             optimizer.zero_grad()
             pred = model(m_batch_inputs, m_batch_lengths, task='metaphor')
-            loss = metaphor_criterion(pred, m_batch_targets)
+            loss = metaphor_criterion(pred.view(-1), m_batch_targets.view(-1).float())
             loss.backward()
             optimizer.step()
             print("Loss = ", loss.item())
