@@ -74,7 +74,8 @@ def train_model(config):
     # Load hyperpartisan data
     hyperpartisan_train_dataset, hyperpartisan_validation_dataset, hyperpartisan_test_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
-        word_vector=glove_vectors)
+        word_vector=glove_vectors,
+        use_data=config.hyperpartisan_use_data)
 
     hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, hyperpartisan_test_dataloader = DataHelper.create_dataloaders(
         train_dataset=hyperpartisan_train_dataset,
@@ -140,6 +141,8 @@ if __name__ == '__main__':
                         help='Path to the metaphor dataset')
     parser.add_argument('--hyperpartisan_dataset_folder', type=str,
                         help='Path to the hyperpartisan dataset')
+    parser.add_argument('--hyperpartisan_use_data', type=float, type=list, default = [10**6, 10**6, 10**6],
+                        help='amount of data to use for the hyperpartisan dataset')
 
     config = parser.parse_args()
 

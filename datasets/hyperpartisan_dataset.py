@@ -15,7 +15,7 @@ from typing import List, Tuple, Dict, Set
 
 class HyperpartisanDataset(data.Dataset):
 
-	def __init__(self, filename: str, word_vector: Vectors, embedding_dimension: int = 300, use_data: int = 10**6):
+	def __init__(self, filename: str, word_vector: Vectors, embedding_dimension: int = 300, use_data: int):
 
 		self._hyperpartisan, self._bias, self._title, self._body, self._word_vectors = self._parse_csv_file(filename, word_vector, use_data)
 
