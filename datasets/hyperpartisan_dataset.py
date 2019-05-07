@@ -37,7 +37,8 @@ class HyperpartisanDataset(data.Dataset):
 		body_length_in_sent = len(body)
 		body_length_in_tokens = [len(sent) for sent in body]
 
-		return hyperpartisan, body_indexed_seq, body_length_in_sent, body_length_in_tokens, title_indexed_seq, title_length
+		# return hyperpartisan, body_indexed_seq, body_length_in_sent, body_length_in_tokens, title_indexed_seq, title_length
+		return body_indexed_seq, hyperpartisan, body_length_in_tokens, body_length_in_sent
 
 	def __len__(self):
 		return self._data_size
