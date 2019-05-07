@@ -18,17 +18,10 @@ tqdm.pandas()
 
 def load_data(data_path, file_name, filter_body, filter_title, usedata):
 
-	# last row in both files is wrong
-	if "validation" in file_name:
-		skiprows = 150000 + 1
-	else:
-		skiprows = 600000 + 1
-
 	# index is the unique article id
 	# cols 1, 6 and 7 are published-at, url and labeled-by
-	dtype = {"title": str, "body": str, "hyperpartisan": int, "bias": int}
-	df = pd.read_csv(data_path + file_name, sep = "\t", index_col = 0, encoding = "ISO-8859-1", dtype = dtype, nrows = usedata, 
-		skiprows = [skiprows], usecols = [0, 2, 3, 4, 5])
+	dtype = {"title": str, "body": str, "hyperpartisan": int}
+	df = pd.read_csv(data_path + file_name, sep = "\t", index_col = 0, encoding = "utf-8", dtype = dtype, usecols = [0, 2, 3, 4])
 	df.index = df.index.astype(int, False)
 
 	# keep only articles with valid title
@@ -57,40 +50,26 @@ def load_data(data_path, file_name, filter_body, filter_title, usedata):
 def clean_data(df):
 
 	def clean_text(text):
-		text = text.replace("&amp;", "&")
-		text = text.replace("&gt;", ">")
-		text = text.replace("&lt;", "<")
-		text = text.replace(" _", " ")
-		text = text.replace("–", "-")
-		text = text.replace(". . .", "...")
+	    text = text.replace("&amp;", "&")
+	    text = text.replace("&gt;", ">")
+	    text = text.replace("&lt;", "<")
+	    text = text.replace("<p>", " ")
+	    text = text.replace("</p>", " ")
+	    text = text.replace(" _", " ")
+	    text = text.replace("–", "-")
+	    text = text.replace("”", "\"")
+	    text = text.replace("“", "\"")
+	    text = text.replace("’", "'")
 		return text
-
-	# def fix_bad_parsing(text):
-	# 	text = text.replace("?", "")
-	# 	# text = text.replace("''", '"')
-	# 	return text
 
 	# clean text from xml special characters and other inconsistancies
 	df["title"] = df.title.apply(clean_text)
 	df["body"] = df.body.apply(clean_text)
 
-	# find instancies where apostrophe is parsed as question mark
-	# convient way: look for 2 consequtive question marks in the body
-	# idx_fix = df.body.apply(lambda x: "??" in x)
-	# print("Found {} instancies with bad parsing".format(idx_fix.sum()))
-
-	# # replace question marks with apostrophes in these instancies
-	# df.loc[idx_fix, "title"] = df.loc[idx_fix, "title"].apply(fix_bad_parsing)
-	# df.loc[idx_fix, "body"] = df.loc[idx_fix, "body"].apply(fix_bad_parsing)
-
 	return df
 
 
 def process_data(df, lowercase):
-
-	def sent_to_word_tokens(text):
-		df_text = pd.Series(text)
-		return df_text.apply(lambda x: ["<s>"] + word_tokenize(x) + ["</s>"]).sum()
 
 	if lowercase:
 		df["title"] = df.title.str.lower
@@ -106,9 +85,8 @@ def process_data(df, lowercase):
 	df["n_sent_body"] = df.body_sent.apply(len)
 
 	# body into word tokens
-	# adds <s> and </s> tokens to indicate beginning and ending of each sentence
 	print("Body to word tokens ...")
-	df["body_tokens"] = df.body_sent.progress_apply(sent_to_word_tokens)
+	df["body_tokens"] = df.body_sent.progress_apply(lambda x: [word_tokenize(i) for i in x])
 
 	# delete helper columns
 	del df["body_sent"]
@@ -133,10 +111,14 @@ def filter_data(df):
 	stopwords.add("...")
 	stopwords.add(".....")
 
-	punctuation = '.,:;?!"\'\'``+={}[]()#~$--'
+	punctuation = '.,:;?!"\'\'``+={}[]()#~$--@'
 
 	for p in list(punctuation):
 		stopwords.add(p)
+
+	stopwords.add("--")
+	stopwords.add("''")
+	stopwords.add("``")
 
 	# print(stopwords)
 
@@ -145,6 +127,12 @@ def filter_data(df):
 	def filter_tokens(tokens):
 		filtered = [token for token in tokens if token not in stopwords]
 		filtered = [re_num_simple.sub("<num>", token) for token in filtered]
+		return filtered
+
+	def filter_tokens_body(body):
+		filtered = [token for token in tokens if token not in stopwords] for tokens in body
+		filtered = [[re_num_simple.sub("<num>", token) for token in tokens] for tokens in filtered]
+		filtered = [tokens for tokens in filtered if tokens != []]
 		return filtered
 
 	# delete tokens that are either stopwords or puncuation (dont add significant info)
@@ -164,62 +152,16 @@ def filter_data(df):
 
 	return df
 
-
-def remove_small_big_articles(df, minimum_len, maximum_len):
-	len_before = len(df)
-	if minimum_len:
-		df = df.loc[df.n_sent_body >= minimum_len, :]
-	if maximum_len:
-		df = df.loc[df.n_sent_body < maximum_len, :]
-	chng = (len_before - len(df)) / len_before * 100
-	print("Removed small articles. Size reduced from {} to {} ({:.2f}%)".format(len_before, len(df), chng))
-	return df
-
-
-def remove_duplicate_tags(df):
-# by removing some tokens
-# there are instances where there appears to be empty sentences
-# (consequtive <s> </s> tags)
-
-	def rmv_dpl(x):
-		Idx = []
-		for idx, e1, e2 in zip(range(len(x)-1), x[:-1], x[1:]):
-			if e1 == "<s>" and e2 == "</s>":
-				Idx.append(idx)
-		for idx in Idx:
-			x = x[:idx] + x[idx + 2:]
-		return x
-
-	print("Removing duplicates tags ...")
-	df["body_tokens"] = df.body_tokens.progress_apply(rmv_dpl)
-
-	return df
-
-
-def get_sentence_indices(df):
-# creates a new column that contains a list indicating the indices where each sentence begins
-
-	def get_sent_idx(tokens):
-		return [i for i, token in enumerate(tokens) if token == "<s>"]
-
-	print("Getting sentence indices ...")
-	df["sent_idx"] = df.body_tokens.progress_apply(get_sent_idx)
-
-	return df
-
-
-def split_dataset(df, ratio):
+def split_dataset(df, valid_size, test_size):
 
 	l = len(df)
-
 	idx = np.random.permutation(range(l))
 
-	splt = int(ratio * l)
+	df_valid = df.iloc[idx[:valid_size], :]
+	df_test = df.iloc[idx[valid_size: valid_size + test_size], :]
+	df_train = df.iloc[idx[valid_size + test_size:], :]
 
-	df_valid = df.iloc[idx[:splt], :]
-	df_test = df.iloc[idx[splt:], :]
-
-	return df_valid, df_test
+	return df_train, df_valid, df_test
 
 ##########################################################################
 ##########################################################################
@@ -227,20 +169,14 @@ def split_dataset(df, ratio):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type = str, default = "./../data/") #"C:/Users/ioann/Datasets/Hyperpartisan/"
-parser.add_argument('--file_name', type = str, default = "training-bypublisher-20181122.txt")
+parser.add_argument('--file_name', type = str, default = "training-byarticle-20181122.txt")
 parser.add_argument('--usedata', type = int, default = None)
-parser.add_argument('--lowercase', type = bool, default = False)
+parser.add_argument('--lowercase', type = bool, default = True)
 parser.add_argument('--filter_title', type = bool, default = True)
 parser.add_argument('--filter_body', type = bool, default = True)
-parser.add_argument('--minimum_len', type = int, default = 4)
-parser.add_argument('--maximum_len', type = int, default = 70)
-parser.add_argument('--split_ratio', type = float, default = 0.5)
+parser.add_argument('--valid_size', type = int, default = 64)
+parser.add_argument('--test_size', type = int, default = 64)
 args, unparsed = parser.parse_known_args()
-
-if "validation" in args.file_name:
-	data_set = "validation"
-else:
-	data_set = "training"
 
 print("Processing {} set".format(data_set))
 
@@ -250,38 +186,17 @@ print("{} set loaded with size {}".format(data_set, len(df)))
 true_percent = df.hyperpartisan.mean() * 100
 print("hyperpartisan statistics: True = {:.2f}% || False = {:.2f}%".format(true_percent, 100 - true_percent))
 
-left = (df.bias == 0).mean() * 100
-left_center = (df.bias == 1).mean() * 100
-least = (df.bias == 2).mean() * 100
-right_center = (df.bias == 3).mean() * 100
-right = (df.bias == 4).mean() * 100
-print("bias statistics: left = {:.2f}% || left-center = {:.2f}% || least = {:.2f}% || right-center = {:.2f}% || right = {:.2f}%".format(
-	left, left_center, least, right_center, right))
-
 df = clean_data(df)
 
 df = process_data(df, args.lowercase)
 
-df = remove_small_big_articles(df, args.minimum_len, args.maximum_len)
-
 df = filter_data(df)
 
-df = remove_duplicate_tags(df)
+df_train, df_valid, df_test = split_dataset(df, args.valid_size, args.test_size)
 
-df = get_sentence_indices(df)
-
-if data_set == "validation":
-	df_valid, df_test = split_dataset(df, args.split_ratio)
-	print("Validation set split with ratio {} to valid and test sets".format(args.split_ratio))
-
-	df_valid.to_csv(args.data_path + "valid" + ".txt", sep = "\t")
-	df_test.to_csv(args.data_path + "test" + ".txt", sep = "\t")
-	print("valid and test set saved succesfully.")	
-
-else:
-
-	df.to_csv(args.data_path + "train" + ".txt", sep = "\t")
-	print("train set saved succesfully.")	
+df_train.to_csv(args.data_path + "train_byart.txt", sep = "\t")
+df_valid.to_csv(args.data_path + "valid_byart.txt", sep = "\t")
+df_test.to_csv(args.data_path + "test_byart.txt", sep = "\t")
 
 
 
