@@ -99,7 +99,7 @@ def train_model(config):
 
     f1_validation_scores = []
 
-    for epoch in range(start_epoch, config.max_epochs + 10):
+    for epoch in range(start_epoch, config.max_epochs + 1):
         print("Epoch %d" % epoch)
         model.train()
         for _, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
