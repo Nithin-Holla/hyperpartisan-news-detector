@@ -57,7 +57,7 @@ def train_model(config):
                        hyp_n_classes=2,
                        pretrained_vectors=glove_vectors.vectors).to(device)
     optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
-                          lr=config.learning_rate, weight_decay=config.weight_decay)
+                              lr=config.learning_rate, weight_decay=config.weight_decay)
     metaphor_criterion = nn.BCELoss()
 
     # Load the checkpoint if found
@@ -141,7 +141,7 @@ if __name__ == '__main__':
                         help='Path to the metaphor dataset')
     parser.add_argument('--hyperpartisan_dataset_folder', type=str,
                         help='Path to the hyperpartisan dataset')
-    parser.add_argument('--hyperpartisan_use_data', type=float, type=list, default = [10**6, 10**6, 10**6],
+    parser.add_argument('--hyperpartisan_use_data', type=list, default=[10 ** 6, 10 ** 6, 10 ** 6],
                         help='amount of data to use for the hyperpartisan dataset')
 
     config = parser.parse_args()
