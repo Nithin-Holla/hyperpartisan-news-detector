@@ -16,12 +16,16 @@ from nltk.tokenize import WhitespaceTokenizer
 
 
 class MetaphorDataset(data.Dataset):
-    def __init__(self, filename: str, word_vector: Vectors):
+    def __init__(
+        self, 
+        filename: str,
+        word_vector: Vectors,
+        max_size: int = None):
         assert os.path.splitext(
             filename)[1] == '.csv', 'Metaphor dataset file should be of type CSV'
 
         self._sentences, self._labels, self._word_vectors = self._parse_csv_file(
-            filename, word_vector)
+            filename, word_vector, max_size)
 
         self._data_size = len(self._sentences)
         self.word_vector = word_vector
@@ -42,7 +46,7 @@ class MetaphorDataset(data.Dataset):
     def __len__(self):
         return self._data_size
 
-    def _parse_csv_file(self, filename: str, word_vector: Vectors) \
+    def _parse_csv_file(self, filename: str, word_vector: Vectors, max_size: int = None) \
             -> Tuple[List[str], List[bool], Dict[str, torch.Tensor]]:
         '''
         Parses the metaphor CSV file and creates the necessary objects for the dataset
@@ -58,7 +62,11 @@ class MetaphorDataset(data.Dataset):
         with open(filename, 'r') as csv_file:
             next(csv_file)  # skip the first line - headers
             csv_reader = csv.reader(csv_file, delimiter=',')
-            for row in csv_reader:
+            for counter, row in enumerate(csv_reader):
+                
+                if max_size and counter >= max_size:
+                    break
+
                 sentence = row[2]
                 sentence_labels_string = ast.literal_eval(row[3])
                 sentence_labels = [int(n) for n in sentence_labels_string]
