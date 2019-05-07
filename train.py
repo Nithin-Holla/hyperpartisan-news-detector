@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 import torchtext
 import argparse
 import os
+import numpy as np
 
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from helpers.hyperpartisan_loader import HyperpartisanLoader
@@ -95,9 +96,12 @@ def train_model(config):
         batch_size=config.batch_size,
         shuffle=True)
 
-    for epoch in range(start_epoch, config.max_epochs + 1):
+    f1_validation_scores = []
+
+    for epoch in range(start_epoch, config.max_epochs + 10):
         print("Epoch %d" % epoch)
-        for step, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
+        model.train()
+        for _, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
             m_batch_inputs = m_batch_inputs.to(device)
             m_batch_targets = m_batch_targets.to(device).view(-1).float()
             m_batch_lengths = m_batch_lengths.to(device)
@@ -108,8 +112,27 @@ def train_model(config):
             loss = metaphor_criterion(unpad_pred, unpad_targets)
             loss.backward()
             optimizer.step()
-            accuracy = get_accuracy(unpad_pred, unpad_targets)
-            print("Loss = %f, accuracy = %f" % (loss.item(), accuracy.item()))
+
+        model.eval()
+
+        val_targets = []
+        val_predictions = []
+        for _, (m_val_batch_inputs, m_val_batch_targets, m_val_batch_lengths) in enumerate(metaphor_validation_dataloader):
+            m_val_batch_inputs = m_val_batch_inputs.to(device)
+            m_val_batch_targets = m_val_batch_targets.to(device).view(-1).float()
+            m_val_batch_lengths = m_val_batch_lengths.to(device)
+
+            pred = model(m_val_batch_inputs, m_val_batch_lengths, task='metaphor')
+            unpad_targets = m_val_batch_targets[m_val_batch_targets != -1]
+            unpad_pred = pred.view(-1)[m_val_batch_targets != -1]
+        
+            val_targets.extend(unpad_targets.tolist())
+            val_predictions.extend(unpad_pred.round().tolist())
+        
+        current_f1_score = f1_score(val_targets, val_predictions, average="binary")
+        f1_validation_scores.append(current_f1_score)
+        print(f'f1 score: {current_f1_score}')
+
 
 
 if __name__ == '__main__':
