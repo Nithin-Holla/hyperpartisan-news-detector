@@ -138,6 +138,22 @@ def train_model(config):
         print(f'f1 score: {current_f1_score}')
 
 
+        for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(hyperpartisan_train_dataloader):
+            h_batch_inputs = h_batch_inputs.to(device)
+            h_batch_targets = h_batch_targets.to(device)
+            h_batch_recover_idx = h_batch_recover_idx.to(device)
+            h_batch_num_sent = h_batch_num_sent.to(device)
+
+            optimizer.zero_grad()
+            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+
+            loss = hyperpartisan_criterion(pred, h_batch_targets)
+            loss.backward()
+            optimizer.step()
+            accuracy = get_accuracy(pred, h_batch_targets)
+            print("Loss = %f, accuracy = %f" % (loss.item(), accuracy.item()))
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
