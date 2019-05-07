@@ -14,11 +14,25 @@ from helpers.data_helper import DataHelper
 from model.JointModel import JointModel
 
 
+def get_accuracy(pred_scores, targets):
+    """
+    Calculate the accuracy
+    :param pred_scores: Scores obtained by the model
+    :param targets: Ground truth targets
+    :return: Accuracy
+    """
+    binary = len(pred_scores.shape) == 1
+    if binary:
+        pred = pred_scores > 0.5
+        accuracy = torch.sum(pred == targets.byte()).float() / pred.shape[0]
+    return accuracy
+
+
 def train_model(config):
     """
     Train the multi-task classifier model
     :param config: Dictionary specifying the model configuration
-    :return:
+    :return: None
     """
     # Flags for deterministic runs
     torch.manual_seed(42)
@@ -94,7 +108,8 @@ def train_model(config):
             loss = metaphor_criterion(unpad_pred, unpad_targets)
             loss.backward()
             optimizer.step()
-            print("Loss = ", loss.item())
+            accuracy = get_accuracy(unpad_pred, unpad_targets)
+            print("Loss = %f, accuracy = %f" % (loss.item(), accuracy.item()))
 
 
 if __name__ == '__main__':
