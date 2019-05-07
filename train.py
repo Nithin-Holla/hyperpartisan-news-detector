@@ -123,6 +123,8 @@ if __name__ == '__main__':
                         help='Weight decay for the optimizer')
     parser.add_argument('--metaphor_dataset_folder', type=str,
                         help='Path to the metaphor dataset')
+    parser.add_argument('--hyperpartisan_dataset_folder', type=str,
+                        help='Path to the hyperpartisan dataset')
 
     config = parser.parse_args()
 
