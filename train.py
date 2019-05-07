@@ -11,6 +11,7 @@ from helpers.hyperpartisan_loader import HyperpartisanLoader
 from datasets.metaphor_dataset import MetaphorDataset
 from helpers.metaphor_loader import MetaphorLoader
 from helpers.data_helper import DataHelper
+from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 from model.JointModel import JointModel
 
 
@@ -59,6 +60,7 @@ def train_model(config):
     optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=config.learning_rate, weight_decay=config.weight_decay)
     metaphor_criterion = nn.BCELoss()
+    hyperpartisan_criterion = nn.BCELoss()
 
     # Load the checkpoint if found
     if os.path.isfile(config.checkpoint_path):
@@ -76,7 +78,7 @@ def train_model(config):
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
         word_vector=glove_vectors)
 
-    hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, hyperpartisan_test_dataloader = DataHelper.create_dataloaders(
+    hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, hyperpartisan_test_dataloader = DataHelperHyperpartisan.create_dataloaders(
         train_dataset=hyperpartisan_train_dataset,
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=hyperpartisan_test_dataset,
@@ -97,10 +99,12 @@ def train_model(config):
 
     for epoch in range(start_epoch, config.max_epochs + 1):
         print("Epoch %d" % epoch)
+
         for step, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
             m_batch_inputs = m_batch_inputs.to(device)
             m_batch_targets = m_batch_targets.to(device).view(-1).float()
             m_batch_lengths = m_batch_lengths.to(device)
+
             optimizer.zero_grad()
             pred = model(m_batch_inputs, m_batch_lengths, task='metaphor')
             unpad_targets = m_batch_targets[m_batch_targets != -1]
@@ -111,6 +115,23 @@ def train_model(config):
             accuracy = get_accuracy(unpad_pred, unpad_targets)
             print("Loss = %f, accuracy = %f" % (loss.item(), accuracy.item()))
 
+        for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(hyperpartisan_train_dataloader):
+            h_batch_inputs = h_batch_inputs.to(device)
+            h_batch_targets = h_batch_targets.to(device)
+            h_batch_recover_idx = h_batch_recover_idx.to(device)
+            h_batch_num_sent = h_batch_num_sent.to(device)
+
+            optimizer.zero_grad()
+            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+
+            unpad_pred = pred.view(-1)[m_batch_targets != -1]
+            loss = hyperpartisan_criterion(unpad_pred, unpad_targets)
+            loss.backward()
+            optimizer.step()
+            accuracy = get_accuracy(unpad_pred, unpad_targets)
+            print("Loss = %f, accuracy = %f" % (loss.item(), accuracy.item()))
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -120,7 +141,7 @@ if __name__ == '__main__':
                         help='Path where data is saved')
     parser.add_argument('--vector_file_name', type=str, required=True,
                         help='File in which vectors are saved')
-    parser.add_argument('--vector_cache_dir', type=str, default='.vector_cache',
+    parser.add_argument('--vector_cache_dir', type=str,
                         help='Directory where vectors would be cached')
     parser.add_argument('--embedding_dimension', type=int, default=300,
                         help='Dimensions of the vector embeddings')
