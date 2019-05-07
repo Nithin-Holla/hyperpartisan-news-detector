@@ -12,8 +12,7 @@ class HyperpartisanLoader():
 	@staticmethod
 	def get_hyperpartisan_datasets(
 			hyperpartisan_dataset_folder: str,
-			word_vector: Vectors,
-			use_data: list) -> Tuple[HyperpartisanDataset, HyperpartisanDataset, HyperpartisanDataset]:
+			word_vector: Vectors) -> Tuple[HyperpartisanDataset, HyperpartisanDataset, HyperpartisanDataset]:
 		'''
 		Parses the hyperpartisan files and creates HyperpartisanDataset objects which
 		include information about the vocabulary and the embedding of the sentences
@@ -25,15 +24,15 @@ class HyperpartisanLoader():
 		assert os.path.isdir(hyperpartisan_dataset_folder), 'Hyperpartisan dataset folder is not valid'
 
 		# Train
-		train_filepath = os.path.join(hyperpartisan_dataset_folder, 'train.txt')
-		train_dataset = HyperpartisanDataset(train_filepath, word_vector, use_data = use_data[0])
+		train_filepath = os.path.join(hyperpartisan_dataset_folder, 'train_byart.txt')
+		train_dataset = HyperpartisanDataset(train_filepath, word_vector)
 
 		# Validation
-		validation_filepath = os.path.join(hyperpartisan_dataset_folder, 'valid.txt')
-		validation_dataset = HyperpartisanDataset(validation_filepath, word_vector, use_data = use_data[1])
+		validation_filepath = os.path.join(hyperpartisan_dataset_folder, 'valid_byart.txt')
+		validation_dataset = HyperpartisanDataset(validation_filepath, word_vector)
 
 		# Test
-		test_filepath = os.path.join(hyperpartisan_dataset_folder, 'test.txt')
-		test_dataset = HyperpartisanDataset(test_filepath, word_vector, use_data = use_data[2])
+		test_filepath = os.path.join(hyperpartisan_dataset_folder, 'test_byart.txt')
+		test_dataset = HyperpartisanDataset(test_filepath, word_vector)
 
 		return train_dataset, validation_dataset, test_dataset
