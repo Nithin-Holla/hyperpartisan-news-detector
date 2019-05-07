@@ -14,6 +14,7 @@ from helpers.metaphor_loader import MetaphorLoader
 from helpers.data_helper import DataHelper
 from model.JointModel import JointModel
 
+from sklearn import metrics
 
 def get_accuracy(pred_scores, targets):
     """
@@ -129,7 +130,7 @@ def train_model(config):
             val_targets.extend(unpad_targets.tolist())
             val_predictions.extend(unpad_pred.round().tolist())
         
-        current_f1_score = f1_score(val_targets, val_predictions, average="binary")
+        current_f1_score = metrics.f1_score(val_targets, val_predictions, average="binary")
         f1_validation_scores.append(current_f1_score)
         print(f'f1 score: {current_f1_score}')
 
