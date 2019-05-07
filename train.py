@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 import torchtext
 import argparse
 import os
+import numpy as np
 
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from helpers.hyperpartisan_loader import HyperpartisanLoader
@@ -14,6 +15,7 @@ from helpers.data_helper import DataHelper
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 from model.JointModel import JointModel
 
+from sklearn import metrics
 
 def get_accuracy(pred_scores, targets):
     """
@@ -97,10 +99,12 @@ def train_model(config):
         batch_size=config.batch_size,
         shuffle=True)
 
+    f1_validation_scores = []
+
     for epoch in range(start_epoch, config.max_epochs + 1):
         print("Epoch %d" % epoch)
-
-        for step, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
+        model.train()
+        for _, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
             m_batch_inputs = m_batch_inputs.to(device)
             m_batch_targets = m_batch_targets.to(device).view(-1).float()
             m_batch_lengths = m_batch_lengths.to(device)
@@ -112,24 +116,26 @@ def train_model(config):
             loss = metaphor_criterion(unpad_pred, unpad_targets)
             loss.backward()
             optimizer.step()
-            accuracy = get_accuracy(unpad_pred, unpad_targets)
-            print("Loss = %f, accuracy = %f" % (loss.item(), accuracy.item()))
 
-        for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(hyperpartisan_train_dataloader):
-            h_batch_inputs = h_batch_inputs.to(device)
-            h_batch_targets = h_batch_targets.to(device)
-            h_batch_recover_idx = h_batch_recover_idx.to(device)
-            h_batch_num_sent = h_batch_num_sent.to(device)
+        model.eval()
 
-            optimizer.zero_grad()
-            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+        val_targets = []
+        val_predictions = []
+        for _, (m_val_batch_inputs, m_val_batch_targets, m_val_batch_lengths) in enumerate(metaphor_validation_dataloader):
+            m_val_batch_inputs = m_val_batch_inputs.to(device)
+            m_val_batch_targets = m_val_batch_targets.to(device).view(-1).float()
+            m_val_batch_lengths = m_val_batch_lengths.to(device)
 
-            unpad_pred = pred.view(-1)[m_batch_targets != -1]
-            loss = hyperpartisan_criterion(unpad_pred, unpad_targets)
-            loss.backward()
-            optimizer.step()
-            accuracy = get_accuracy(unpad_pred, unpad_targets)
-            print("Loss = %f, accuracy = %f" % (loss.item(), accuracy.item()))
+            pred = model(m_val_batch_inputs, m_val_batch_lengths, task='metaphor')
+            unpad_targets = m_val_batch_targets[m_val_batch_targets != -1]
+            unpad_pred = pred.view(-1)[m_val_batch_targets != -1]
+        
+            val_targets.extend(unpad_targets.tolist())
+            val_predictions.extend(unpad_pred.round().tolist())
+        
+        current_f1_score = metrics.f1_score(val_targets, val_predictions, average="binary")
+        f1_validation_scores.append(current_f1_score)
+        print(f'f1 score: {current_f1_score}')
 
 
 
