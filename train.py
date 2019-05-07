@@ -42,7 +42,7 @@ def train_model(config):
                        hidden_dim=config.hidden_dim,
                        hyp_n_classes=2,
                        pretrained_vectors=glove_vectors.vectors).to(device)
-    optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
+    optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
                           lr=config.learning_rate, weight_decay=config.weight_decay)
     metaphor_criterion = nn.BCELoss()
 
@@ -81,14 +81,17 @@ def train_model(config):
         batch_size=config.batch_size,
         shuffle=True)
 
-    for epochs in range(start_epoch, config.max_epochs + 1):
+    for epoch in range(start_epoch, config.max_epochs + 1):
+        print("Epoch %d" % epoch)
         for step, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
             m_batch_inputs = m_batch_inputs.to(device)
-            m_batch_targets = m_batch_targets.to(device)
+            m_batch_targets = m_batch_targets.to(device).view(-1).float()
             m_batch_lengths = m_batch_lengths.to(device)
             optimizer.zero_grad()
             pred = model(m_batch_inputs, m_batch_lengths, task='metaphor')
-            loss = metaphor_criterion(pred.view(-1), m_batch_targets.view(-1).float())
+            unpad_targets = m_batch_targets[m_batch_targets != -1]
+            unpad_pred = pred.view(-1)[m_batch_targets != -1]
+            loss = metaphor_criterion(unpad_pred, unpad_targets)
             loss.backward()
             optimizer.step()
             print("Loss = ", loss.item())
@@ -106,7 +109,7 @@ if __name__ == '__main__':
                         help='Directory where vectors would be cached')
     parser.add_argument('--embedding_dimension', type=int, default=300,
                         help='Dimensions of the vector embeddings')
-    parser.add_argument('--learning_rate', type=float, default=0.01,
+    parser.add_argument('--learning_rate', type=float, default=2e-3,
                         help='Learning rate')
     parser.add_argument('--max_epochs', type=int, default=5,
                         help='Maximum number of epochs to train the model')
