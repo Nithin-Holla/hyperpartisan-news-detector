@@ -62,7 +62,8 @@ def train_model(config):
     vocab_size = len(glove_vectors.vectors)
 
     # Define the model, the optimizer and the loss module
-    total_embedding_dim = (config.elmo_embeddings_size * config.elmo_embeddings_vectors) + glove_vectors.dim
+    total_embedding_dim = (config.elmo_embeddings_size *
+                           config.elmo_embeddings_vectors) + glove_vectors.dim
 
     model = JointModel(vocab_size=vocab_size,
                        embedding_dim=total_embedding_dim,
@@ -171,8 +172,8 @@ def train_model(config):
                 h_batch_sent_lengths = h_batch_sent_lengths.to(device)
 
                 optimizer.zero_grad()
-                pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
-                                              h_batch_num_sent), task='hyperpartisan')
+                pred = model(h_batch_inputs, (h_batch_recover_idx,
+                                              h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
                 loss = hyperpartisan_criterion(pred, h_batch_targets)
                 running_loss += loss.item()
@@ -199,8 +200,8 @@ def train_model(config):
 
                 with torch.no_grad():
 
-                    pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
-                                                  h_batch_num_sent), task='hyperpartisan')
+                    pred = model(h_batch_inputs, (h_batch_recover_idx,
+                                                  h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
                     loss = hyperpartisan_criterion(pred, h_batch_targets)
                     accu = get_accuracy(pred, h_batch_targets)
@@ -216,13 +217,15 @@ def train_model(config):
 
             print(targets, pred)
 
-            precision = metrics.precision_score(targets, pred, average = "binary")
-            recall = metrics.recall_score(targets, pred, average = "binary")
-            f1 = metrics.f1_score(targets, pred, average = "binary")
+            precision = metrics.precision_score(
+                targets, pred, average="binary")
+            recall = metrics.recall_score(targets, pred, average="binary")
+            f1 = metrics.f1_score(targets, pred, average="binary")
 
             print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
-                datetime.now().time().replace(microsecond = 0), epoch, loss_train, loss_valid, accu_train, accu_valid))
-            print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(precision, recall, f1))
+                datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accu_train, accu_valid))
+            print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+                precision, recall, f1))
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.clock() - tic) / 60))
@@ -240,8 +243,8 @@ def train_model(config):
 
         with torch.no_grad():
 
-            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
-                                          h_batch_num_sent), task='hyperpartisan')
+            pred = model(h_batch_inputs, (h_batch_recover_idx,
+                                          h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
             loss = hyperpartisan_criterion(pred, h_batch_targets)
             accu = get_accuracy(pred, h_batch_targets)
@@ -255,12 +258,15 @@ def train_model(config):
     targets = h_batch_targets.long().numpy()
     pred = (pred > 0.5).long().numpy()
 
-    precision = metrics.precision_score(targets, pred, average = "binary")
-    recall = metrics.recall_score(targets, pred, average = "binary")
-    f1 = metrics.f1_score(targets, pred, average = "binary")
+    precision = metrics.precision_score(targets, pred, average="binary")
+    recall = metrics.recall_score(targets, pred, average="binary")
+    f1 = metrics.f1_score(targets, pred, average="binary")
 
-    print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(datetime.now().time().replace(microsecond = 0), loss_test, accu_test))
-    print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(precision, recall, f1))
+    print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
+        datetime.now().time().replace(microsecond=0), loss_test, accu_test))
+    print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+        precision, recall, f1))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
