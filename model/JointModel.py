@@ -30,7 +30,9 @@ class JointModel(nn.Module):
             # unsort
             sent_embeddings_2d = torch.index_select(sorted_sent_embeddings, dim = 0, index = recover_idx)
 
-            max_num_sent = torch.max(num_sent_per_document)
+            sorted_idx_sent = torch.argsort(num_sent_per_document, descending = True)
+            sorted_num_sent_per_document = torch.index_select(num_sent_per_document, dim = 0, index = sorted_idx_sent)
+            max_num_sent = sorted_num_sent_per_document[-1]
 
             # create new 3d tensor (already padded across dim=1)
             sent_embeddings_3d = torch.zeros(batch_size, max_num_sent, sent_embeddings_2d.shape[-1]).to(self.device)
@@ -41,8 +43,14 @@ class JointModel(nn.Module):
                 sent_embeddings_3d[i, :num_sent, :] = sent_embeddings_2d[processed_sent: processed_sent + num_sent, :]
                 processed_sent += num_sent
 
+            sorted_sent_embeddings_3d = torch.index_select(sent_embeddings_3d, dim = 0, index = sorted_idx)
+
             # get document embeddings
-            doc_embedding = self.sentence_encoder(sent_embeddings_3d)
+            sorted_doc_embedding = self.sentence_encoder(sorted_sent_embeddings_3d)
+
+            recover_idx_sent = torch.argsort(sorted_idx_sent, descending = False)
+
+            doc_embedding = torch.index_select(sorted_doc_embedding, dim = 0, index = recover_idx_sent)
 
             out = self.hyperpartisan_fc(doc_embedding).view(-1)
 
