@@ -207,8 +207,6 @@ def train_model(config):
             targets = h_batch_targets.long().numpy()
             pred = (pred > 0.5).long().numpy()
 
-            print(targets, pred)
-
             precision = metrics.precision_score(targets, pred, average = "binary")
             recall = metrics.recall_score(targets, pred, average = "binary")
             f1 = metrics.f1_score(targets, pred, average = "binary")
