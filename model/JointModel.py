@@ -16,13 +16,13 @@ class JointModel(nn.Module):
         self.tasks = ['hyperpartisan', 'metaphor']
         self.device = device
 
-    def forward(self, x, len_x, task):
+    def forward(self, x, extra_args, task):
         assert task in self.tasks
         if task == 'hyperpartisan':
 
             # len_x argument contains the recover_idx to unsort sentences
             # and a list of the number of sentences per article to batch them
-            recover_idx, num_sent_per_document = len_x
+            recover_idx, num_sent_per_document, sent_lengths = extra_args
             batch_size = len(num_sent_per_document)
 
             sorted_sent_embeddings = self.word_encoder(x, len_x, task)
@@ -47,6 +47,7 @@ class JointModel(nn.Module):
             out = self.hyperpartisan_fc(doc_embedding).view(-1)
 
         elif task == 'metaphor':
+            len_x = extra_args
             out = self.word_encoder(x, len_x, task)
 
         return out
