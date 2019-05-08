@@ -28,7 +28,8 @@ class MetaphorLoader():
         train_filepath = os.path.join(
             metaphor_dataset_folder, 'VUA_seq_formatted_train.csv')
 
-        train_dataset = MetaphorDataset(train_filepath, word_vector)
+        train_dataset = MetaphorDataset(
+            train_filepath, word_vector)
 
         # Validation
         validation_filepath = os.path.join(
@@ -41,6 +42,7 @@ class MetaphorLoader():
         test_filepath = os.path.join(
             metaphor_dataset_folder, 'VUA_seq_formatted_test.csv')
 
-        test_dataset = MetaphorDataset(test_filepath, word_vector)
+        test_dataset = MetaphorDataset(
+            test_filepath, word_vector)
 
         return train_dataset, validation_dataset, test_dataset

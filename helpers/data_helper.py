@@ -72,13 +72,17 @@ class DataHelper():
         batch_split = list(zip(*DataLoaderBatch))
 
         sequences, targets, lengths = batch_split[0], batch_split[1], batch_split[2]
+        
         max_length = max(lengths)
 
-        padded_sequences = np.ones((batch_size, max_length), dtype=np.int64)
+        embedding_dimension = sequences[0].shape[1]
+
+        padded_sequences = np.ones((batch_size, max_length, embedding_dimension))
         padded_targets = np.zeros((batch_size, max_length), dtype=np.int64) - 1
 
         for i, l in enumerate(lengths):
-            padded_sequences[i][0:l] = sequences[i][0:l]
+            padded_sequences[i][0:l][:] = sequences[i][0:l][:]
             padded_targets[i][0:l] = targets[i][0:l]
 
+        
         return cls._sort_batch(torch.from_numpy(padded_sequences), torch.from_numpy(padded_targets), torch.tensor(lengths))
