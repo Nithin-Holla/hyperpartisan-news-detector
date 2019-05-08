@@ -35,7 +35,7 @@ class JointModel(nn.Module):
             max_num_sent = sorted_num_sent_per_document[-1]
 
             # create new 3d tensor (already padded across dim=1)
-            sent_embeddings_3d = torch.zeros(batch_size, max_num_sent, sent_embeddings_2d.shape[-1]).to(self.device)
+            sent_embeddings_3d = torch.zeros(batch_size, max_num_sent.int().item(), sent_embeddings_2d.shape[-1]).to(self.device)
 
             # fill the 3d tensor
             processed_sent = 0

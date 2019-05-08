@@ -212,8 +212,8 @@ def train_model(config):
             loss_valid = running_loss / (step + 1)
             accu_valid = running_accu / (step + 1)
 
-            targets = h_batch_targets.long().cpu().numpy()
-            pred = (pred > 0.5).long().cpu().numpy()
+            targets = h_batch_targets.long().tolist()
+            pred = pred.round().tolist()
 
             precision = metrics.precision_score(targets, pred, average = "binary")
             recall = metrics.recall_score(targets, pred, average = "binary")
@@ -252,8 +252,8 @@ def train_model(config):
     loss_test = running_loss / (step + 1)
     accu_test = running_accu / (step + 1)
 
-    targets = h_batch_targets.long().cpu().numpy()
-    pred = (pred > 0.5).long().cpu().numpy()
+    targets = h_batch_targets.long().tolist()
+    pred = (pred > 0.5).long().tolist()
 
     precision = metrics.precision_score(targets, pred, average="binary")
     recall = metrics.recall_score(targets, pred, average="binary")
