@@ -20,12 +20,12 @@ class JointModel(nn.Module):
         assert task in self.tasks
         if task == 'hyperpartisan':
 
-            # len_x argument contains the recover_idx to unsort sentences
+            # extra_args argument contains the recover_idx to unsort sentences
             # and a list of the number of sentences per article to batch them
             recover_idx, num_sent_per_document, sent_lengths = extra_args
             batch_size = len(num_sent_per_document)
 
-            sorted_sent_embeddings = self.word_encoder(x, len_x, task)
+            sorted_sent_embeddings = self.word_encoder(x, sent_lengths, task)
 
             # unsort
             sent_embeddings_2d = torch.index_select(sorted_sent_embeddings, dim = 0, index = recover_idx)
