@@ -70,7 +70,7 @@ def train_model(config):
     optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=config.learning_rate, weight_decay=config.weight_decay)
     metaphor_criterion = nn.BCELoss()
-    hyperpartisan_criterion = nn.CrossEntropyLoss()
+    hyperpartisan_criterion = nn.BCELoss()
 
     # Load the checkpoint if found
     if os.path.isfile(config.checkpoint_path):
@@ -165,15 +165,15 @@ def train_model(config):
                 h_batch_num_sent = h_batch_num_sent.to(device)
 
                 optimizer.zero_grad()
-                logits = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+                pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
 
-                loss = hyperpartisan_criterion(logits, h_batch_targets)
+                loss = hyperpartisan_criterion(pred, h_batch_targets)
                 running_loss += loss.item()
 
                 loss.backward()
                 optimizer.step()
 
-                accuracy = get_accuracy(logits, h_batch_targets)
+                accuracy = get_accuracy(pred, h_batch_targets)
                 running_accu += accuracy.item()
 
             loss_train = running_loss / (step + 1)
@@ -190,10 +190,10 @@ def train_model(config):
 
                 with torch.no_grad():
 
-                    logits = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+                    pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
 
-                    loss = hyperpartisan_criterion(logits, h_batch_targets)
-                    accu = get_accuracy(logits, h_batch_targets)
+                    loss = hyperpartisan_criterion(pred, h_batch_targets)
+                    accu = get_accuracy(pred, h_batch_targets)
 
                     running_loss += loss.item()
                     running_accu += accu.item()
@@ -203,6 +203,8 @@ def train_model(config):
 
             print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
                 datetime.now().time().replace(microsecond = 0), epoch, loss_train, loss_valid, accu_train, accu_valid))
+            print("     (valid): precision = {:.4f}, recall = {:.4f}, f1 = {:.4f}".format(metrics.precision(h_batch_targets, pred, "binary"),
+                metrics.recall(h_batch_targets, pred, "binary"), metrics.f1_score(h_batch_targets, pred, "binary")))
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond = 0), (time.clock() - tic)/60))   
 
@@ -217,10 +219,10 @@ def train_model(config):
 
         with torch.no_grad():
 
-            logits = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
 
-            loss = hyperpartisan_criterion(logits, h_batch_targets)
-            accu = get_accuracy(logits, h_batch_targets)
+            loss = hyperpartisan_criterion(pred, h_batch_targets)
+            accu = get_accuracy(pred, h_batch_targets)
 
             running_loss += loss.item()
             running_accu += accu.item()
@@ -229,6 +231,8 @@ def train_model(config):
     accu_test = running_accu / (step + 1)
 
     print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(datetime.now().time().replace(microsecond = 0), loss_test, accu_test))
+    print("     (valid): precision = {:.4f}, recall = {:.4f}, f1 = {:.4f}".format(metrics.precision(h_batch_targets, pred, "binary"),
+        metrics.recall(h_batch_targets, pred, "binary"), metrics.f1_score(h_batch_targets, pred, "binary")))
 
 
 if __name__ == '__main__':
