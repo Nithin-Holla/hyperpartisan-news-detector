@@ -77,4 +77,4 @@ class DataHelperHyperpartisan():
 
         recover_idx = np.argsort(sorted_idx)
 
-        return torch.LongTensor(padded_sequences), torch.FloatTensor(targets), torch.LongTensor(recover_idx), torch.LongTensor(num_of_sent)
+        return torch.LongTensor(padded_sequences), torch.FloatTensor(targets), torch.LongTensor(recover_idx), torch.LongTensor(num_of_sent), torch.LongTensor(sorted_concat_lengths)

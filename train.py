@@ -157,15 +157,16 @@ def train_model(config):
             running_loss, running_accu = 0, 0
             model.train()
 
-            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(
+            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
                     hyperpartisan_train_dataloader):
                 h_batch_inputs = h_batch_inputs.to(device)
                 h_batch_targets = h_batch_targets.to(device)
                 h_batch_recover_idx = h_batch_recover_idx.to(device)
                 h_batch_num_sent = h_batch_num_sent.to(device)
+                h_batch_sent_lengths = h_batch_sent_lengths.to(device)
 
                 optimizer.zero_grad()
-                pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+                pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
                 loss = hyperpartisan_criterion(pred, h_batch_targets)
                 running_loss += loss.item()
@@ -182,16 +183,17 @@ def train_model(config):
             running_loss, running_accu = 0, 0
             model.eval()
 
-            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(
+            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
                     hyperpartisan_validation_dataloader):
                 h_batch_inputs = h_batch_inputs.to(device)
                 h_batch_targets = h_batch_targets.to(device)
                 h_batch_recover_idx = h_batch_recover_idx.to(device)
                 h_batch_num_sent = h_batch_num_sent.to(device)
+                h_batch_sent_lengths = h_batch_sent_lengths.to(device)
 
                 with torch.no_grad():
 
-                    pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+                    pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
                     loss = hyperpartisan_criterion(pred, h_batch_targets)
                     accu = get_accuracy(pred, h_batch_targets)
@@ -221,16 +223,17 @@ def train_model(config):
     running_loss, running_accu = 0, 0
     model.eval()
 
-    for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(
+    for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
             hyperpartisan_test_dataloader):
         h_batch_inputs = h_batch_inputs.to(device)
         h_batch_targets = h_batch_targets.to(device)
         h_batch_recover_idx = h_batch_recover_idx.to(device)
         h_batch_num_sent = h_batch_num_sent.to(device)
+        h_batch_sent_lengths = h_batch_sent_lengths.to(device)
 
         with torch.no_grad():
 
-            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent), task='hyperpartisan')
+            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
             loss = hyperpartisan_criterion(pred, h_batch_targets)
             accu = get_accuracy(pred, h_batch_targets)
