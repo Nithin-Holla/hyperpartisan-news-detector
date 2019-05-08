@@ -65,7 +65,6 @@ def train_model(config):
     model = JointModel(vocab_size=vocab_size,
                        embedding_dim=glove_vectors.dim,
                        hidden_dim=config.hidden_dim,
-                       hyp_n_classes=2,
                        pretrained_vectors=glove_vectors.vectors,
                        device=device).to(device)
     optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
