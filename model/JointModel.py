@@ -46,7 +46,7 @@ class JointModel(nn.Module):
             sorted_sent_embeddings_3d = torch.index_select(sent_embeddings_3d, dim = 0, index = sorted_idx)
 
             # get document embeddings
-            sorted_doc_embedding = self.sentence_encoder(sorted_sent_embeddings_3d)
+            sorted_doc_embedding = self.sentence_encoder(sorted_sent_embeddings_3d, sorted_num_sent_per_document)
 
             recover_idx_sent = torch.argsort(sorted_idx_sent, descending = False)
 
