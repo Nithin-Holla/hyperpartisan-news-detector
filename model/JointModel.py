@@ -7,12 +7,13 @@ from model.WordEncoder import WordEncoder
 
 class JointModel(nn.Module):
 
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, hyp_n_classes, pretrained_vectors):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, hyp_n_classes, pretrained_vectors, device):
         super(JointModel, self).__init__()
         self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim, pretrained_vectors)
         self.sentence_encoder = SentenceEncoder(2*hidden_dim, hidden_dim)
         self.hyperpartisan_fc = nn.Linear(2 * hidden_dim, hyp_n_classes)
         self.tasks = ['hyperpartisan', 'metaphor']
+        self.device = device
 
     def forward(self, x, len_x, task):
         assert task in self.tasks
@@ -31,7 +32,7 @@ class JointModel(nn.Module):
             max_num_sent = torch.max(num_sent_per_document)
 
             # create new 3d tensor (already padded across dim=1)
-            sent_embeddings_3d = torch.zeros(batch_size, max_num_sent, sent_embeddings_2d.shape[-1])
+            sent_embeddings_3d = torch.zeros(batch_size, max_num_sent, sent_embeddings_2d.shape[-1]).to(self.device)
 
             # fill the 3d tensor
             processed_sent = 0
