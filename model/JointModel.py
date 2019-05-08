@@ -9,8 +9,8 @@ class JointModel(nn.Module):
 
     def __init__(self, vocab_size, embedding_dim, hidden_dim, pretrained_vectors, device):
         super(JointModel, self).__init__()
-        self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim, pretrained_vectors)
-        self.sentence_encoder = SentenceEncoder(2*hidden_dim, hidden_dim)
+        self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim, pretrained_vectors, device)
+        self.sentence_encoder = SentenceEncoder(2*hidden_dim, hidden_dim, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
                                               nn.Sigmoid())
         self.tasks = ['hyperpartisan', 'metaphor']
@@ -42,7 +42,7 @@ class JointModel(nn.Module):
                 processed_sent += num_sent
 
             # get document embeddings
-            doc_embedding = self.sentence_encoder(sent_embeddings_3d)
+            doc_embedding = self.sentence_encoder(sent_embeddings_3d, num_sent_per_document)
 
             out = self.hyperpartisan_fc(doc_embedding).view(-1)
 
