@@ -18,7 +18,7 @@ class WordEncoder(nn.Module):
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.zeros((2 * hidden_dim, 1)))
         self.metaphor_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
-                                         nn.Softmax(dim=1))
+                                         nn.Sigmoid())
         self.tasks = ['hyperpartisan', 'metaphor']
 
     def forward(self, x, len_x, task):
