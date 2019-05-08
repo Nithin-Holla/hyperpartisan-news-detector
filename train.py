@@ -176,6 +176,8 @@ def train_model(config):
                 accuracy = get_accuracy(pred, h_batch_targets)
                 running_accu += accuracy.item()
 
+                break
+
             loss_train = running_loss / (step + 1)
             accu_train = running_accu / (step + 1)
 
@@ -202,10 +204,16 @@ def train_model(config):
             loss_valid = running_loss / (step + 1)
             accu_valid = running_accu / (step + 1)
 
+            targets = h_batch_targets.long().numpy()
+            pred = (pred > 0.5).long().numpy()
+
+            precision = metrics.precision_score(targets, pred, average = "binary")
+            recall = metrics.recall_score(targets, pred, average = "binary")
+            f1 = metrics.f1_score(targets, pred, average = "binary")
+
             print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
                 datetime.now().time().replace(microsecond = 0), epoch, loss_train, loss_valid, accu_train, accu_valid))
-            print("     (valid): precision = {:.4f}, recall = {:.4f}, f1 = {:.4f}".format(metrics.precision(h_batch_targets, pred, "binary"),
-                metrics.recall(h_batch_targets, pred, "binary"), metrics.f1_score(h_batch_targets, pred, "binary")))
+            print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(precision, recall, f1))
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.clock() - tic) / 60))
@@ -233,10 +241,15 @@ def train_model(config):
     loss_test = running_loss / (step + 1)
     accu_test = running_accu / (step + 1)
 
-    print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(datetime.now().time().replace(microsecond = 0), loss_test, accu_test))
-    print("     (valid): precision = {:.4f}, recall = {:.4f}, f1 = {:.4f}".format(metrics.precision(h_batch_targets, pred, "binary"),
-        metrics.recall(h_batch_targets, pred, "binary"), metrics.f1_score(h_batch_targets, pred, "binary")))
+    targets = h_batch_targets.long().numpy()
+    pred = (pred > 0.5).long().numpy()
 
+    precision = metrics.precision_score(targets, pred, average = "binary")
+    recall = metrics.recall_score(targets, pred, average = "binary")
+    f1 = metrics.f1_score(targets, pred, average = "binary")
+
+    print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(datetime.now().time().replace(microsecond = 0), loss_test, accu_test))
+    print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(precision, recall, f1))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

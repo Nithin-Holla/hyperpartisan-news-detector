@@ -12,7 +12,7 @@ class JointModel(nn.Module):
         self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim, pretrained_vectors)
         self.sentence_encoder = SentenceEncoder(2*hidden_dim, hidden_dim)
         self.hyperpartisan_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
-                                              nn.Softmax(dim=1))
+                                              nn.Sigmoid())
         self.tasks = ['hyperpartisan', 'metaphor']
         self.device = device
 
@@ -44,7 +44,7 @@ class JointModel(nn.Module):
             # get document embeddings
             doc_embedding = self.sentence_encoder(sent_embeddings_3d)
 
-            out = self.hyperpartisan_fc(doc_embedding)
+            out = self.hyperpartisan_fc(doc_embedding).view(-1)
 
         elif task == 'metaphor':
             out = self.word_encoder(x, len_x, task)
