@@ -7,9 +7,9 @@ from model.WordEncoder import WordEncoder
 
 class JointModel(nn.Module):
 
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, pretrained_vectors, device):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, device):
         super(JointModel, self).__init__()
-        self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim, pretrained_vectors)
+        self.word_encoder = WordEncoder(vocab_size, embedding_dim, hidden_dim)
         self.sentence_encoder = SentenceEncoder(2*hidden_dim, hidden_dim)
         self.hyperpartisan_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
                                               nn.Sigmoid())
