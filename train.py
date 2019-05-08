@@ -19,6 +19,7 @@ from sklearn import metrics
 from datetime import datetime
 import time
 
+
 def get_accuracy(pred_scores, targets):
     """
     Calculate the accuracy
@@ -32,9 +33,9 @@ def get_accuracy(pred_scores, targets):
         pred = pred_scores > 0.5
         accuracy = torch.sum(pred == targets.byte()).float() / pred.shape[0]
     else:
-        pred = torch.argmax(pred_scores, dim = 1)
+        pred = torch.argmax(pred_scores, dim=1)
         accuracy = torch.mean((pred == targets).float())
-    
+
     return accuracy
 
 
@@ -64,7 +65,6 @@ def train_model(config):
     model = JointModel(vocab_size=vocab_size,
                        embedding_dim=glove_vectors.dim,
                        hidden_dim=config.hidden_dim,
-                       hyp_n_classes=2,
                        pretrained_vectors=glove_vectors.vectors,
                        device=device).to(device)
     optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
@@ -85,7 +85,6 @@ def train_model(config):
 
     # Load hyperpartisan data
     if config.train_hyperpartisan:
-
         hyperpartisan_train_dataset, hyperpartisan_validation_dataset, hyperpartisan_test_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
             hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
             word_vector=glove_vectors)
@@ -99,7 +98,6 @@ def train_model(config):
 
     # Load metaphor data
     if config.train_metaphor:
-
         metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
             metaphor_dataset_folder=config.metaphor_dataset_folder,
             word_vector=glove_vectors)
@@ -137,7 +135,8 @@ def train_model(config):
 
             val_targets = []
             val_predictions = []
-            for _, (m_val_batch_inputs, m_val_batch_targets, m_val_batch_lengths) in enumerate(metaphor_validation_dataloader):
+            for _, (m_val_batch_inputs, m_val_batch_targets, m_val_batch_lengths) in enumerate(
+                    metaphor_validation_dataloader):
                 m_val_batch_inputs = m_val_batch_inputs.to(device)
                 m_val_batch_targets = m_val_batch_targets.to(device).view(-1).float()
                 m_val_batch_lengths = m_val_batch_lengths.to(device)
@@ -145,10 +144,10 @@ def train_model(config):
                 pred = model(m_val_batch_inputs, m_val_batch_lengths, task='metaphor')
                 unpad_targets = m_val_batch_targets[m_val_batch_targets != -1]
                 unpad_pred = pred.view(-1)[m_val_batch_targets != -1]
-            
+
                 val_targets.extend(unpad_targets.tolist())
                 val_predictions.extend(unpad_pred.round().tolist())
-        
+
             current_f1_score = metrics.f1_score(val_targets, val_predictions, average="binary")
             f1_validation_scores.append(current_f1_score)
             print(f'f1 score: {current_f1_score}')
@@ -158,7 +157,8 @@ def train_model(config):
             running_loss, running_accu = 0, 0
             model.train()
 
-            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(hyperpartisan_train_dataloader):
+            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(
+                    hyperpartisan_train_dataloader):
                 h_batch_inputs = h_batch_inputs.to(device)
                 h_batch_targets = h_batch_targets.to(device)
                 h_batch_recover_idx = h_batch_recover_idx.to(device)
@@ -182,7 +182,8 @@ def train_model(config):
             running_loss, running_accu = 0, 0
             model.eval()
 
-            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(hyperpartisan_validation_dataloader):
+            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(
+                    hyperpartisan_validation_dataloader):
                 h_batch_inputs = h_batch_inputs.to(device)
                 h_batch_targets = h_batch_targets.to(device)
                 h_batch_recover_idx = h_batch_recover_idx.to(device)
@@ -206,12 +207,14 @@ def train_model(config):
             print("     (valid): precision = {:.4f}, recall = {:.4f}, f1 = {:.4f}".format(metrics.precision(h_batch_targets, pred, "binary"),
                 metrics.recall(h_batch_targets, pred, "binary"), metrics.f1_score(h_batch_targets, pred, "binary")))
 
-    print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond = 0), (time.clock() - tic)/60))   
+    print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
+                                                             (time.clock() - tic) / 60))
 
     running_loss, running_accu = 0, 0
     model.eval()
 
-    for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(hyperpartisan_test_dataloader):
+    for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent) in enumerate(
+            hyperpartisan_test_dataloader):
         h_batch_inputs = h_batch_inputs.to(device)
         h_batch_targets = h_batch_targets.to(device)
         h_batch_recover_idx = h_batch_recover_idx.to(device)
@@ -243,7 +246,7 @@ if __name__ == '__main__':
                         help='Path where data is saved')
     parser.add_argument('--vector_file_name', type=str, required=True,
                         help='File in which vectors are saved')
-    parser.add_argument('--vector_cache_dir', type=str, default = "C:/Users/ioann/Datasets/vector_cache/",
+    parser.add_argument('--vector_cache_dir', type=str, default='.vector_cache',
                         help='Directory where vectors would be cached')
     parser.add_argument('--embedding_dimension', type=int, default=300,
                         help='Dimensions of the vector embeddings')
@@ -259,7 +262,7 @@ if __name__ == '__main__':
                         help='Number of GloVe vectors to load initially')
     parser.add_argument('--weight_decay', type=float, default=0,
                         help='Weight decay for the optimizer')
-    parser.add_argument('--metaphor_dataset_folder', type=str, default = "C:/Users/ioann/Datasets/metaphor_in_context_master/data/VUAsequence/",
+    parser.add_argument('--metaphor_dataset_folder', type=str, required=True,
                         help='Path to the metaphor dataset')
     parser.add_argument('--hyperpartisan_dataset_folder', type=str,
                         help='Path to the hyperpartisan dataset')
