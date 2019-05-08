@@ -62,10 +62,12 @@ def train_model(config):
     vocab_size = len(glove_vectors.vectors)
 
     # Define the model, the optimizer and the loss module
+    total_embedding_dim = (config.elmo_embeddings_size *
+                           config.elmo_embeddings_vectors) + glove_vectors.dim
+
     model = JointModel(vocab_size=vocab_size,
-                       embedding_dim=glove_vectors.dim,
+                       embedding_dim=total_embedding_dim,
                        hidden_dim=config.hidden_dim,
-                       pretrained_vectors=glove_vectors.vectors,
                        device=device).to(device)
     optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=config.learning_rate, weight_decay=config.weight_decay)
@@ -114,16 +116,17 @@ def train_model(config):
     tic = time.clock()
 
     for epoch in range(start_epoch, config.max_epochs + 1):
-
+        print(f'Epoch {epoch}')
         if config.train_metaphor:
 
             model.train()
             for _, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
-                m_batch_inputs = m_batch_inputs.to(device)
+                m_batch_inputs = m_batch_inputs.to(device).float()
                 m_batch_targets = m_batch_targets.to(device).view(-1).float()
                 m_batch_lengths = m_batch_lengths.to(device)
 
                 optimizer.zero_grad()
+
                 pred = model(m_batch_inputs, m_batch_lengths, task='metaphor')
                 unpad_targets = m_batch_targets[m_batch_targets != -1]
                 unpad_pred = pred.view(-1)[m_batch_targets != -1]
@@ -137,18 +140,21 @@ def train_model(config):
             val_predictions = []
             for _, (m_val_batch_inputs, m_val_batch_targets, m_val_batch_lengths) in enumerate(
                     metaphor_validation_dataloader):
-                m_val_batch_inputs = m_val_batch_inputs.to(device)
-                m_val_batch_targets = m_val_batch_targets.to(device).view(-1).float()
+                m_val_batch_inputs = m_val_batch_inputs.to(device).float()
+                m_val_batch_targets = m_val_batch_targets.to(
+                    device).view(-1).float()
                 m_val_batch_lengths = m_val_batch_lengths.to(device)
 
-                pred = model(m_val_batch_inputs, m_val_batch_lengths, task='metaphor')
+                pred = model(m_val_batch_inputs,
+                             m_val_batch_lengths, task='metaphor')
                 unpad_targets = m_val_batch_targets[m_val_batch_targets != -1]
                 unpad_pred = pred.view(-1)[m_val_batch_targets != -1]
 
                 val_targets.extend(unpad_targets.tolist())
                 val_predictions.extend(unpad_pred.round().tolist())
 
-            current_f1_score = metrics.f1_score(val_targets, val_predictions, average="binary")
+            current_f1_score = metrics.f1_score(
+                val_targets, val_predictions, average="binary")
             f1_validation_scores.append(current_f1_score)
             print(f'f1 score: {current_f1_score}')
 
@@ -166,7 +172,8 @@ def train_model(config):
                 h_batch_sent_lengths = h_batch_sent_lengths.to(device)
 
                 optimizer.zero_grad()
-                pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
+                pred = model(h_batch_inputs, (h_batch_recover_idx,
+                                              h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
                 loss = hyperpartisan_criterion(pred, h_batch_targets)
                 running_loss += loss.item()
@@ -193,7 +200,8 @@ def train_model(config):
 
                 with torch.no_grad():
 
-                    pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
+                    pred = model(h_batch_inputs, (h_batch_recover_idx,
+                                                  h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
                     loss = hyperpartisan_criterion(pred, h_batch_targets)
                     accu = get_accuracy(pred, h_batch_targets)
@@ -207,15 +215,14 @@ def train_model(config):
             targets = h_batch_targets.long().cpu().numpy()
             pred = (pred > 0.5).long().cpu().numpy()
 
-            print(targets, pred)
-
             precision = metrics.precision_score(targets, pred, average = "binary")
             recall = metrics.recall_score(targets, pred, average = "binary")
             f1 = metrics.f1_score(targets, pred, average = "binary")
 
             print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
-                datetime.now().time().replace(microsecond = 0), epoch, loss_train, loss_valid, accu_train, accu_valid))
-            print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(precision, recall, f1))
+                datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accu_train, accu_valid))
+            print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+                precision, recall, f1))
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.clock() - tic) / 60))
@@ -233,7 +240,8 @@ def train_model(config):
 
         with torch.no_grad():
 
-            pred = model(h_batch_inputs, (h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
+            pred = model(h_batch_inputs, (h_batch_recover_idx,
+                                          h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
             loss = hyperpartisan_criterion(pred, h_batch_targets)
             accu = get_accuracy(pred, h_batch_targets)
@@ -247,12 +255,15 @@ def train_model(config):
     targets = h_batch_targets.long().cpu().numpy()
     pred = (pred > 0.5).long().cpu().numpy()
 
-    precision = metrics.precision_score(targets, pred, average = "binary")
-    recall = metrics.recall_score(targets, pred, average = "binary")
-    f1 = metrics.f1_score(targets, pred, average = "binary")
+    precision = metrics.precision_score(targets, pred, average="binary")
+    recall = metrics.recall_score(targets, pred, average="binary")
+    f1 = metrics.f1_score(targets, pred, average="binary")
 
-    print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(datetime.now().time().replace(microsecond = 0), loss_test, accu_test))
-    print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(precision, recall, f1))
+    print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
+        datetime.now().time().replace(microsecond=0), loss_test, accu_test))
+    print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+        precision, recall, f1))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -272,7 +283,7 @@ if __name__ == '__main__':
                         help='Maximum number of epochs to train the model')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='Batch size for training the model')
-    parser.add_argument('--hidden_dim', type=int, default=50,
+    parser.add_argument('--hidden_dim', type=int, default=300,
                         help='Hidden dimension of the recurrent network')
     parser.add_argument('--glove_size', type=int,
                         help='Number of GloVe vectors to load initially')
@@ -282,10 +293,14 @@ if __name__ == '__main__':
                         help='Path to the metaphor dataset')
     parser.add_argument('--hyperpartisan_dataset_folder', type=str,
                         help='Path to the hyperpartisan dataset')
-    parser.add_argument('--train_metaphor', type=bool, default=False,
+    parser.add_argument('--train_metaphor', type=lambda s: s.lower() in ['true', 't', 'yes', '1'], default=False,
                         help="Whether to train on the metaphor task")
-    parser.add_argument('--train_hyperpartisan', type=bool, default=True,
+    parser.add_argument('--train_hyperpartisan', type=lambda s: s.lower() in ['true', 't', 'yes', '1'], default=True,
                         help="Whether to train on the hyperpartisan task")
+    parser.add_argument('--elmo_embeddings_size', type=int, default=1024,
+                        help='Elmo embeddings size')
+    parser.add_argument('--elmo_embeddings_vectors', type=int, default=3,
+                        help='Number of Elmo embeddings vectors')
 
     config = parser.parse_args()
 
