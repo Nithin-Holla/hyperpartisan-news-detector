@@ -25,13 +25,6 @@ class JointModel(nn.Module):
             recover_idx, num_sent_per_document, sent_lengths = extra_args
             batch_size = len(num_sent_per_document)
 
-            for obj in gc.get_objects():
-                try:
-                    if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                        print(type(obj), obj.size())
-                except:
-                    pass
-
             sorted_sent_embeddings = self.sentence_encoder(x, sent_lengths, task)
 
             # unsort

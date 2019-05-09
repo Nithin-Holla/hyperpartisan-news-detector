@@ -26,6 +26,7 @@ mkdir -p $TMPDIR/VUAsequence
 rsync -a $HOME/hyperpartisan-news-detector/* $TMPDIR/
 rsync -a $HOME/Project/data/glove.840B.300d.txt $TMPDIR/vector_cache
 rsync -a $HOME/Project/data/VUAsequence/* $TMPDIR/VUAsequence
+rsync -a $HOME/Project/data/Hyperpartisan/* $TMPDIR/Hyperpartisan
 
 cd $TMPDIR
 
