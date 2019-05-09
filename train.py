@@ -110,7 +110,8 @@ def train_model(config):
     if config.mode in ['metaphor', 'joint']:
         metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
             metaphor_dataset_folder=config.metaphor_dataset_folder,
-            word_vector=glove_vectors)
+            word_vector=glove_vectors,
+            elmo_vectors=config.elmo_embeddings_vectors)
 
         metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader = DataHelper.create_dataloaders(
             train_dataset=metaphor_train_dataset,
@@ -295,7 +296,7 @@ if __name__ == '__main__':
                         help='Learning rate')
     parser.add_argument('--max_epochs', type=int, default=5,
                         help='Maximum number of epochs to train the model')
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help='Batch size for training the model')
     parser.add_argument('--hidden_dim', type=int, default=100,
                         help='Hidden dimension of the recurrent network')

@@ -12,7 +12,8 @@ class MetaphorLoader():
     @staticmethod
     def get_metaphor_datasets(
             metaphor_dataset_folder: str,
-            word_vector: Vectors) -> Tuple[MetaphorDataset, MetaphorDataset, MetaphorDataset]:
+            word_vector: Vectors,
+            elmo_vectors: int) -> Tuple[MetaphorDataset, MetaphorDataset, MetaphorDataset]:
         '''
         Parses the metaphor files and creates MetaphorDataset objects which
         include information about the vocabulary and the embedding of the sentences
@@ -29,20 +30,20 @@ class MetaphorLoader():
             metaphor_dataset_folder, 'VUA_seq_formatted_train.csv')
 
         train_dataset = MetaphorDataset(
-            train_filepath, word_vector)
+            train_filepath, word_vector, elmo_vectors)
 
         # Validation
         validation_filepath = os.path.join(
             metaphor_dataset_folder, 'VUA_seq_formatted_val.csv')
 
         validation_dataset = MetaphorDataset(
-            validation_filepath, word_vector)
+            validation_filepath, word_vector, elmo_vectors)
 
         # Test
         test_filepath = os.path.join(
             metaphor_dataset_folder, 'VUA_seq_formatted_test.csv')
 
         test_dataset = MetaphorDataset(
-            test_filepath, word_vector)
+            test_filepath, word_vector, elmo_vectors)
 
         return train_dataset, validation_dataset, test_dataset

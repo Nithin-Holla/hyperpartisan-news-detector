@@ -21,6 +21,7 @@ class MetaphorDataset(data.Dataset):
             self,
             filename: str,
             word_vector: Vectors,
+            elmo_vectors: int,
             elmo_dimensions: int = 1024):
         assert os.path.splitext(
             filename)[1] == '.csv', 'Metaphor dataset file should be of type CSV'
@@ -35,6 +36,7 @@ class MetaphorDataset(data.Dataset):
         self.word_vector = word_vector
         self.tokenizer = WhitespaceTokenizer()
         self.elmo_dimensions = elmo_dimensions
+        self.elmo_vectors = elmo_vectors
 
     def __getitem__(self, idx):
         sentence = self._sentences[idx]
@@ -45,8 +47,7 @@ class MetaphorDataset(data.Dataset):
         indexed_sequence = torch.stack([self.word_vector[x] for x in words])
         elmo_embedding_file = h5py.File(self.elmo_filename, 'r')
         sentence_elmo_embeddings = elmo_embedding_file[str(idx)]
-        elmo_embeddings = torch.cat([torch.Tensor(sentence_elmo_embeddings[0]), torch.Tensor(
-            sentence_elmo_embeddings[1]), torch.Tensor(sentence_elmo_embeddings[2])], dim=1)
+        elmo_embeddings = torch.cat([torch.Tensor(sentence_elmo_embeddings[i]) for i in range(self.elmo_vectors)], dim=1)
 
         # elmo: [ n_words x (1024*3) ]; [ n_words x 300 ] => [ n_words x 1324 ]
         assert list(elmo_embeddings.size()) == [sentence_length, self.elmo_dimensions * len(sentence_elmo_embeddings)]
