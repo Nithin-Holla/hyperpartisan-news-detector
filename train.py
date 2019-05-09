@@ -39,6 +39,20 @@ def get_accuracy(pred_scores, targets):
     return accuracy
 
 
+def load_glove_vectors(config):
+    glove_vectors = torchtext.vocab.Vectors(name=config.vector_file_name,
+                                            cache=config.vector_cache_dir,
+                                            max_vectors=config.glove_size)
+    glove_vectors.stoi = {k: v+2 for (k, v) in glove_vectors.stoi.items()}
+    glove_vectors.itos = ['<unk>', '<pad>'] + glove_vectors.itos
+    glove_vectors.stoi['<unk>'] = 0
+    glove_vectors.stoi['<pad>'] = 1
+    unk_vector = torch.zeros((1, glove_vectors.dim))
+    pad_vector = torch.mean(glove_vectors.vectors, dim=0, keepdim=True)
+    glove_vectors.vectors = torch.cat((unk_vector, pad_vector, glove_vectors.vectors), dim=0)
+    return glove_vectors
+
+
 def train_model(config):
     """
     Train the multi-task classifier model
@@ -55,20 +69,13 @@ def train_model(config):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = torchtext.vocab.Vectors(name=config.vector_file_name,
-                                            cache=config.vector_cache_dir,
-                                            max_vectors=config.glove_size)
-
-    vocab_size = len(glove_vectors.vectors)
+    glove_vectors = load_glove_vectors(config)
 
     # Define the model, the optimizer and the loss module
     total_embedding_dim = (config.elmo_embeddings_size *
                            config.elmo_embeddings_vectors) + glove_vectors.dim
 
-    model = JointModel(vocab_size=vocab_size,
-                       embedding_dim=total_embedding_dim,
-                       hidden_dim=config.hidden_dim,
-                       device=device).to(device)
+    model = JointModel(embedding_dim=total_embedding_dim, hidden_dim=config.hidden_dim, device=device).to(device)
     optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=config.learning_rate, weight_decay=config.weight_decay)
     metaphor_criterion = nn.BCELoss()
