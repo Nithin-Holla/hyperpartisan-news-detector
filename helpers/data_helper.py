@@ -14,7 +14,7 @@ class DataHelper():
             train_dataset: data.Dataset = None,
             validation_dataset: data.Dataset = None,
             test_dataset: data.Dataset = None,
-            batch_size: int = 64,
+            batch_size: int = 32,
             shuffle: bool = True) -> Tuple[data.DataLoader, data.DataLoader, data.DataLoader]:
         '''
         Creates DataLoader objects for the given datasets while 

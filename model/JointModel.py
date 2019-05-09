@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-
+import gc
 from model.DocumentEncoder import DocumentEncoder
 from model.SentenceEncoder import SentenceEncoder
 
@@ -25,7 +25,12 @@ class JointModel(nn.Module):
             recover_idx, num_sent_per_document, sent_lengths = extra_args
             batch_size = len(num_sent_per_document)
 
-            print(x.shape)
+            for obj in gc.get_objects():
+                try:
+                    if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                        print(type(obj), obj.size())
+                except:
+                    pass
 
             sorted_sent_embeddings = self.sentence_encoder(x, sent_lengths, task)
 
