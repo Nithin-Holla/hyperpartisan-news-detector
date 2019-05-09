@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-import gc
+
 from model.DocumentEncoder import DocumentEncoder
 from model.SentenceEncoder import SentenceEncoder
 
