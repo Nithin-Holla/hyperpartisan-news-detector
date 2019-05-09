@@ -5,3 +5,6 @@ __pycache__/
 /.*
 /data/vua/*
 /data/vua-sequence/*
+
+*.hdf5
+*.zip
