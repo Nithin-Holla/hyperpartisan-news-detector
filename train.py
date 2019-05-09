@@ -80,13 +80,13 @@ def train_model(config):
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
-        print("Resuming training from epoch %d with loaded model and optimizer..." % start_epoch)
+        print("Resuming training in %s mode from epoch %d with loaded model and optimizer..." % (config.mode, start_epoch))
     else:
         start_epoch = 1
-        print("Training the model from scratch...")
+        print("Training the model in %s mode from scratch..." % config.mode)
 
     # Load hyperpartisan data
-    if config.train_hyperpartisan:
+    if config.mode in ['hyperpartisan', 'joint']:
         hyperpartisan_train_dataset, hyperpartisan_validation_dataset, hyperpartisan_test_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
             hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
             word_vector=glove_vectors)
@@ -99,7 +99,7 @@ def train_model(config):
             shuffle=True)
 
     # Load metaphor data
-    if config.train_metaphor:
+    if config.mode in ['metaphor', 'joint']:
         metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
             metaphor_dataset_folder=config.metaphor_dataset_folder,
             word_vector=glove_vectors)
@@ -117,7 +117,7 @@ def train_model(config):
 
     for epoch in range(start_epoch, config.max_epochs + 1):
         print(f'Epoch {epoch}')
-        if config.train_metaphor:
+        if config.mode in ['metaphor', 'joint']:
 
             model.train()
             for _, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
@@ -158,7 +158,7 @@ def train_model(config):
             f1_validation_scores.append(current_f1_score)
             print(f'f1 score: {current_f1_score}')
 
-        if config.train_hyperpartisan:
+        if config.mode in ['hyperpartisan', 'joint']:
 
             running_loss, running_accu = 0, 0
             model.train()
@@ -227,42 +227,43 @@ def train_model(config):
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.clock() - tic) / 60))
 
-    running_loss, running_accu = 0, 0
-    model.eval()
+    if config.mode in ['hyperpartisan', 'joint']:
+        running_loss, running_accu = 0, 0
+        model.eval()
 
-    for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
-            hyperpartisan_test_dataloader):
-        h_batch_inputs = h_batch_inputs.to(device)
-        h_batch_targets = h_batch_targets.to(device)
-        h_batch_recover_idx = h_batch_recover_idx.to(device)
-        h_batch_num_sent = h_batch_num_sent.to(device)
-        h_batch_sent_lengths = h_batch_sent_lengths.to(device)
+        for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
+                hyperpartisan_test_dataloader):
+            h_batch_inputs = h_batch_inputs.to(device)
+            h_batch_targets = h_batch_targets.to(device)
+            h_batch_recover_idx = h_batch_recover_idx.to(device)
+            h_batch_num_sent = h_batch_num_sent.to(device)
+            h_batch_sent_lengths = h_batch_sent_lengths.to(device)
 
-        with torch.no_grad():
+            with torch.no_grad():
 
-            pred = model(h_batch_inputs, (h_batch_recover_idx,
-                                          h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
+                pred = model(h_batch_inputs, (h_batch_recover_idx,
+                                              h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
-            loss = hyperpartisan_criterion(pred, h_batch_targets)
-            accu = get_accuracy(pred, h_batch_targets)
+                loss = hyperpartisan_criterion(pred, h_batch_targets)
+                accu = get_accuracy(pred, h_batch_targets)
 
-            running_loss += loss.item()
-            running_accu += accu.item()
+                running_loss += loss.item()
+                running_accu += accu.item()
 
-    loss_test = running_loss / (step + 1)
-    accu_test = running_accu / (step + 1)
+        loss_test = running_loss / (step + 1)
+        accu_test = running_accu / (step + 1)
 
-    targets = h_batch_targets.long().tolist()
-    pred = (pred > 0.5).long().tolist()
+        targets = h_batch_targets.long().tolist()
+        pred = (pred > 0.5).long().tolist()
 
-    precision = metrics.precision_score(targets, pred, average="binary")
-    recall = metrics.recall_score(targets, pred, average="binary")
-    f1 = metrics.f1_score(targets, pred, average="binary")
+        precision = metrics.precision_score(targets, pred, average="binary")
+        recall = metrics.recall_score(targets, pred, average="binary")
+        f1 = metrics.f1_score(targets, pred, average="binary")
 
-    print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), loss_test, accu_test))
-    print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
-        precision, recall, f1))
+        print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
+            datetime.now().time().replace(microsecond=0), loss_test, accu_test))
+        print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+            precision, recall, f1))
 
 
 if __name__ == '__main__':
@@ -293,10 +294,8 @@ if __name__ == '__main__':
                         help='Path to the metaphor dataset')
     parser.add_argument('--hyperpartisan_dataset_folder', type=str,
                         help='Path to the hyperpartisan dataset')
-    parser.add_argument('--train_metaphor', type=lambda s: s.lower() in ['true', 't', 'yes', '1'], default=False,
-                        help="Whether to train on the metaphor task")
-    parser.add_argument('--train_hyperpartisan', type=lambda s: s.lower() in ['true', 't', 'yes', '1'], default=True,
-                        help="Whether to train on the hyperpartisan task")
+    parser.add_argument('--mode', choices=['metaphor', 'hyperpartisan', 'joint'],
+                        help='The mode in which to train the model')
     parser.add_argument('--elmo_embeddings_size', type=int, default=1024,
                         help='Elmo embeddings size')
     parser.add_argument('--elmo_embeddings_vectors', type=int, default=3,
