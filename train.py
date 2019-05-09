@@ -96,7 +96,8 @@ def train_model(config):
     if config.mode in ['hyperpartisan', 'joint']:
         hyperpartisan_train_dataset, hyperpartisan_validation_dataset, hyperpartisan_test_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
             hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
-            word_vector=glove_vectors)
+            word_vector=glove_vectors,
+            elmo_vectors=config.elmo_embeddings_vectors)
 
         hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, hyperpartisan_test_dataloader = DataHelperHyperpartisan.create_dataloaders(
             train_dataset=hyperpartisan_train_dataset,
@@ -195,7 +196,10 @@ def train_model(config):
             accu_train = running_accu / (step + 1)
 
             running_loss, running_accu = 0, 0
+            valid_targets = []
+            valid_pred = []
             model.eval()
+
 
             for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
                     hyperpartisan_validation_dataloader):
@@ -216,15 +220,15 @@ def train_model(config):
                     running_loss += loss.item()
                     running_accu += accu.item()
 
+                    valid_targets += h_batch_targets.long().tolist()
+                    valid_pred += pred.round().long().tolist()
+
             loss_valid = running_loss / (step + 1)
             accu_valid = running_accu / (step + 1)
 
-            targets = h_batch_targets.long().tolist()
-            pred = pred.round().tolist()
-
-            precision = metrics.precision_score(targets, pred, average = "binary")
-            recall = metrics.recall_score(targets, pred, average = "binary")
-            f1 = metrics.f1_score(targets, pred, average = "binary")
+            precision = metrics.precision_score(valid_targets, valid_pred, average = "binary")
+            recall = metrics.recall_score(valid_targets, valid_pred, average = "binary")
+            f1 = metrics.f1_score(valid_targets, valid_pred, average = "binary")
 
             print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
                 datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accu_train, accu_valid))
@@ -236,6 +240,8 @@ def train_model(config):
 
     if config.mode in ['hyperpartisan', 'joint']:
         running_loss, running_accu = 0, 0
+        test_targets = []
+        test_pred = []
         model.eval()
 
         for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
@@ -257,15 +263,15 @@ def train_model(config):
                 running_loss += loss.item()
                 running_accu += accu.item()
 
+                test_targets += h_batch_targets.long().tolist()
+                test_pred += pred.round().long().tolist()
+
         loss_test = running_loss / (step + 1)
         accu_test = running_accu / (step + 1)
 
-        targets = h_batch_targets.long().tolist()
-        pred = (pred > 0.5).long().tolist()
-
-        precision = metrics.precision_score(targets, pred, average="binary")
-        recall = metrics.recall_score(targets, pred, average="binary")
-        f1 = metrics.f1_score(targets, pred, average="binary")
+        precision = metrics.precision_score(test_targets, test_pred, average="binary")
+        recall = metrics.recall_score(test_targets, test_pred, average="binary")
+        f1 = metrics.f1_score(test_targets, test_pred, average="binary")
 
         print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
             datetime.now().time().replace(microsecond=0), loss_test, accu_test))
@@ -291,7 +297,7 @@ if __name__ == '__main__':
                         help='Maximum number of epochs to train the model')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for training the model')
-    parser.add_argument('--hidden_dim', type=int, default=300,
+    parser.add_argument('--hidden_dim', type=int, default=100,
                         help='Hidden dimension of the recurrent network')
     parser.add_argument('--glove_size', type=int,
                         help='Number of GloVe vectors to load initially')
@@ -305,7 +311,7 @@ if __name__ == '__main__':
                         help='The mode in which to train the model')
     parser.add_argument('--elmo_embeddings_size', type=int, default=1024,
                         help='Elmo embeddings size')
-    parser.add_argument('--elmo_embeddings_vectors', type=int, default=3,
+    parser.add_argument('--elmo_embeddings_vectors', type=int, default=1,
                         help='Number of Elmo embeddings vectors')
 
     config = parser.parse_args()

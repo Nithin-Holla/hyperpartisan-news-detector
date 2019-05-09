@@ -25,6 +25,8 @@ class JointModel(nn.Module):
             recover_idx, num_sent_per_document, sent_lengths = extra_args
             batch_size = len(num_sent_per_document)
 
+            print(x.shape)
+
             sorted_sent_embeddings = self.sentence_encoder(x, sent_lengths, task)
 
             # unsort
@@ -32,18 +34,19 @@ class JointModel(nn.Module):
 
             sorted_idx_sent = torch.argsort(num_sent_per_document, descending = True)
             sorted_num_sent_per_document = torch.index_select(num_sent_per_document, dim = 0, index = sorted_idx_sent)
-            max_num_sent = sorted_num_sent_per_document[-1]
+            max_num_sent = sorted_num_sent_per_document[0]
 
             # create new 3d tensor (already padded across dim=1)
-            sent_embeddings_3d = torch.zeros(batch_size, max_num_sent.int().item(), sent_embeddings_2d.shape[-1]).to(self.device)
+            sent_embeddings_3d = torch.zeros(batch_size, max_num_sent.item(), sent_embeddings_2d.shape[-1]).to(self.device)
 
             # fill the 3d tensor
             processed_sent = 0
             for i, num_sent in enumerate(num_sent_per_document):
-                sent_embeddings_3d[i, :num_sent, :] = sent_embeddings_2d[processed_sent: processed_sent + num_sent, :]
-                processed_sent += num_sent
 
-            sorted_sent_embeddings_3d = torch.index_select(sent_embeddings_3d, dim = 0, index = sorted_idx)
+                sent_embeddings_3d[i, :num_sent.item(), :] = sent_embeddings_2d[processed_sent: processed_sent + num_sent.item(), :]
+                processed_sent += num_sent.item()
+
+            sorted_sent_embeddings_3d = torch.index_select(sent_embeddings_3d, dim = 0, index = sorted_idx_sent)
 
             # get document embeddings
             sorted_doc_embedding = self.document_encoder(sorted_sent_embeddings_3d, sorted_num_sent_per_document)
