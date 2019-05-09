@@ -14,7 +14,7 @@ class DataHelperHyperpartisan():
             train_dataset: data.Dataset = None,
             validation_dataset: data.Dataset = None,
             test_dataset: data.Dataset = None,
-            batch_size: int = 64,
+            batch_size: int = 32,
             shuffle: bool = True) -> Tuple[data.DataLoader, data.DataLoader, data.DataLoader]:
         '''
         Creates DataLoader objects for the given datasets while 
@@ -80,9 +80,9 @@ class DataHelperHyperpartisan():
         max_length = max(concat_lengths)
 
         embedding_dimension = concat_sequences[0].shape[1]
-        
+
         padded_sequences = np.ones((sum(num_of_sent) + batch_size, max_length, embedding_dimension))
         for i, l in enumerate(concat_lengths):
             padded_sequences[i][0:l][:] = concat_sequences[i][0:l][:]
 
-        return cls._sort_batch(torch.Tensor(padded_sequences), torch.Tensor(targets), torch.LongTensor(num_of_sent), torch.Tensor(concat_lengths))
+        return cls._sort_batch(torch.Tensor(padded_sequences), torch.Tensor(targets), torch.LongTensor(num_of_sent), torch.LongTensor(concat_lengths))

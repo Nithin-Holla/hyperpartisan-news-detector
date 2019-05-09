@@ -12,7 +12,8 @@ class HyperpartisanLoader():
 	@staticmethod
 	def get_hyperpartisan_datasets(
 			hyperpartisan_dataset_folder: str,
-			word_vector: Vectors) -> Tuple[HyperpartisanDataset, HyperpartisanDataset, HyperpartisanDataset]:
+			word_vector: Vectors,
+			elmo_vectors: int) -> Tuple[HyperpartisanDataset, HyperpartisanDataset, HyperpartisanDataset]:
 		'''
 		Parses the hyperpartisan files and creates HyperpartisanDataset objects which
 		include information about the vocabulary and the embedding of the sentences
@@ -25,14 +26,14 @@ class HyperpartisanLoader():
 
 		# Train
 		train_filepath = os.path.join(hyperpartisan_dataset_folder, 'train_byart.txt')
-		train_dataset = HyperpartisanDataset(train_filepath, word_vector)
+		train_dataset = HyperpartisanDataset(train_filepath, word_vector, elmo_vectors)
 
 		# Validation
 		validation_filepath = os.path.join(hyperpartisan_dataset_folder, 'valid_byart.txt')
-		validation_dataset = HyperpartisanDataset(validation_filepath, word_vector)
+		validation_dataset = HyperpartisanDataset(validation_filepath, word_vector, elmo_vectors)
 
 		# Test
 		test_filepath = os.path.join(hyperpartisan_dataset_folder, 'test_byart.txt')
-		test_dataset = HyperpartisanDataset(test_filepath, word_vector)
+		test_dataset = HyperpartisanDataset(test_filepath, word_vector, elmo_vectors)
 
 		return train_dataset, validation_dataset, test_dataset

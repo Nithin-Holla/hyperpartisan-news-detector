@@ -29,6 +29,6 @@ rsync -a $HOME/Project/data/VUAsequence/* $TMPDIR/VUAsequence
 
 cd $TMPDIR
 
-srun python3 -u train.py --vector_file_name glove.840B.300d.txt --glove_size 100000 --hyperpartisan_dataset_folder Hyperpartisan --checkpoint_path saved_models/JM.pt --max_epochs 30 --vector_cache_dir vector_cache --metaphor_dataset_folder VUAsequence
+srun python3 -u train.py --mode hyperpartisan --vector_file_name glove.840B.300d.txt --glove_size 100000 --hyperpartisan_dataset_folder Hyperpartisan --checkpoint_path saved_models/JM.pt --max_epochs 10 --vector_cache_dir vector_cache --metaphor_dataset_folder VUAsequence
 
 # rsync -arv output/BoW/* $HOME/Project/outputs/BoW

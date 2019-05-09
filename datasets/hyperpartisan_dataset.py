@@ -17,12 +17,13 @@ import h5py
 
 class HyperpartisanDataset(data.Dataset):
 
-	def __init__(self, filename: str, word_vector: Vectors, elmo_embeddings: int = 1024):
+	def __init__(self, filename: str, word_vector: Vectors, elmo_vectors: int, elmo_embeddings: int = 1024):
 
 		self._hyperpartisan, self._title, self._body, self._word_vectors = self._parse_csv_file(
 			filename, word_vector)
 		
 		self.elmo_embeddings = elmo_embeddings
+		self.elmo_vectors = elmo_vectors
 		self.article_indexes = {}
 		start_index = 0
 
@@ -37,14 +38,11 @@ class HyperpartisanDataset(data.Dataset):
 		self.word_vector = word_vector
 
 	def __getitem__(self, idx):
-		# print(idx)
 		start_index, end_index = self.article_indexes[idx]
-		# print(f'start - {start_index}; end - {end_index}')
 
 		elmo_embedding_file = h5py.File(self.elmo_filename, 'r')
 		
 		title = self._title[idx]
-		# print(title)
 		body = self._body[idx]
 
 		title_indexed_seq = torch.stack([self.word_vector[token] for token in title])
@@ -61,14 +59,7 @@ class HyperpartisanDataset(data.Dataset):
 			glove_embeddings = indexed_seq[index - start_index]
 			
 			sentence_elmo_embeddings = elmo_embedding_file[str(index)]
-			elmo_embeddings = torch.cat([torch.Tensor(sentence_elmo_embeddings[0]), torch.Tensor(
-				sentence_elmo_embeddings[1]), torch.Tensor(sentence_elmo_embeddings[2])], dim=1)
-
-			# # elmo: [ n_words x (1024*3) ]; [ n_words x 300 ] => [ n_words x 1324 ]
-			# assert list(elmo_embeddings.size()) == [sentence_length, self.elmo_dimensions * len(sentence_elmo_embeddings)]
-			# assert list(indexed_sequence.size()) == [sentence_length, self.word_vector.dim]
-			# print(f'elmo - {elmo_embeddings.shape}')
-			# print(f'glove - {glove_embeddings.shape}')
+			elmo_embeddings = torch.cat([torch.Tensor(sentence_elmo_embeddings[i]) for i in range(self.elmo_vectors)], dim=1)
 
 			combined_embeddings = torch.cat([elmo_embeddings, glove_embeddings], dim=1)
 			result_sequences.append(combined_embeddings)
@@ -79,7 +70,7 @@ class HyperpartisanDataset(data.Dataset):
 		hyperpartisan = self._hyperpartisan[idx]
 
 		title_length = len(title)
-		body_length_in_sent = len(body)
+		body_length_in_sent = len(body) + 1
 		body_length_in_tokens = [title_length] + [len(sent) for sent in body]
 
 		assert len(body_length_in_tokens) == len(result_sequences)
