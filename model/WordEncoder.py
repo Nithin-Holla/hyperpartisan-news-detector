@@ -5,10 +5,9 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 class WordEncoder(nn.Module):
 
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, device):
+    def __init__(self, embedding_dim, hidden_dim, device):
         super(WordEncoder, self).__init__()
 
-        self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.tasks = ['hyperpartisan', 'metaphor']
