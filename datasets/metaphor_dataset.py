@@ -50,7 +50,7 @@ class MetaphorDataset(data.Dataset):
         elmo_embeddings = torch.cat([torch.Tensor(sentence_elmo_embeddings[i]) for i in range(self.elmo_vectors)], dim=1)
 
         # elmo: [ n_words x (1024*3) ]; [ n_words x 300 ] => [ n_words x 1324 ]
-        assert list(elmo_embeddings.size()) == [sentence_length, self.elmo_dimensions * len(sentence_elmo_embeddings)]
+        assert list(elmo_embeddings.size()) == [sentence_length, self.elmo_dimensions * self.elmo_vectors]
         assert list(indexed_sequence.size()) == [sentence_length, self.word_vector.dim]
 
         combined_embeddings = torch.cat(
