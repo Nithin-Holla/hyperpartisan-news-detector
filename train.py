@@ -76,7 +76,7 @@ def train_model(config):
                            config.elmo_embeddings_vectors) + glove_vectors.dim
 
     model = JointModel(embedding_dim=total_embedding_dim, hidden_dim=config.hidden_dim, device=device).to(device)
-    optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                               lr=config.learning_rate, weight_decay=config.weight_decay)
     metaphor_criterion = nn.BCELoss()
     hyperpartisan_criterion = nn.BCELoss()
@@ -289,7 +289,7 @@ if __name__ == '__main__':
                         help='Learning rate')
     parser.add_argument('--max_epochs', type=int, default=5,
                         help='Maximum number of epochs to train the model')
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for training the model')
     parser.add_argument('--hidden_dim', type=int, default=300,
                         help='Hidden dimension of the recurrent network')
