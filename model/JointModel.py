@@ -1,16 +1,16 @@
 import torch
 from torch import nn
 
+from model.DocumentEncoder import DocumentEncoder
 from model.SentenceEncoder import SentenceEncoder
-from model.WordEncoder import WordEncoder
 
 
 class JointModel(nn.Module):
 
     def __init__(self, embedding_dim, hidden_dim, device):
         super(JointModel, self).__init__()
-        self.word_encoder = WordEncoder(embedding_dim, hidden_dim, device)
-        self.sentence_encoder = SentenceEncoder(2 * hidden_dim, hidden_dim, device)
+        self.sentence_encoder = SentenceEncoder(embedding_dim, hidden_dim, device)
+        self.document_encoder = DocumentEncoder(2 * hidden_dim, hidden_dim, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
                                               nn.Sigmoid())
         self.tasks = ['hyperpartisan', 'metaphor']
@@ -25,7 +25,7 @@ class JointModel(nn.Module):
             recover_idx, num_sent_per_document, sent_lengths = extra_args
             batch_size = len(num_sent_per_document)
 
-            sorted_sent_embeddings = self.word_encoder(x, sent_lengths, task)
+            sorted_sent_embeddings = self.sentence_encoder(x, sent_lengths, task)
 
             # unsort
             sent_embeddings_2d = torch.index_select(sorted_sent_embeddings, dim = 0, index = recover_idx)
@@ -46,7 +46,7 @@ class JointModel(nn.Module):
             sorted_sent_embeddings_3d = torch.index_select(sent_embeddings_3d, dim = 0, index = sorted_idx)
 
             # get document embeddings
-            sorted_doc_embedding = self.sentence_encoder(sorted_sent_embeddings_3d, sorted_num_sent_per_document)
+            sorted_doc_embedding = self.document_encoder(sorted_sent_embeddings_3d, sorted_num_sent_per_document)
 
             recover_idx_sent = torch.argsort(sorted_idx_sent, descending = False)
 
@@ -56,6 +56,6 @@ class JointModel(nn.Module):
 
         elif task == 'metaphor':
             len_x = extra_args
-            out = self.word_encoder(x, len_x, task)
+            out = self.sentence_encoder(x, len_x, task)
 
         return out
