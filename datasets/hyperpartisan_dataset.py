@@ -61,19 +61,19 @@ class HyperpartisanDataset(data.Dataset):
 		body_glove_embeddings = []
 		for sentence_tokens in body_tokens:
 			sentence_glove_embeddings = torch.stack(
-				[self.glove_vectors[token] for token in sentence_tokens])
+				[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in sentence_tokens])
 			body_glove_embeddings.append(sentence_glove_embeddings)
 
-		indexed_seq = [title_glove_embeddings] + body_glove_embeddings
+		glove_embeddings = [title_glove_embeddings] + body_glove_embeddings
 
 		result_embeddings = []
 		for index in range(start_index, end_index):
-			glove_embeddings = indexed_seq[index - start_index]
-			elmo_embeddings = torch.Tensor(elmo_embedding_file[str(idx)])
+			sentence_glove_embeddings = glove_embeddings[index - start_index]
+			sentence_elmo_embeddings = torch.Tensor(elmo_embedding_file[str(index)])
 
 			# elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
 			combined_embeddings = torch.cat(
-				[elmo_embeddings, glove_embeddings], dim=1)
+				[sentence_elmo_embeddings, sentence_glove_embeddings], dim=1)
 			result_embeddings.append(combined_embeddings)
 
 		elmo_embedding_file.close()
