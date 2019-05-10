@@ -21,6 +21,8 @@ class MetaphorLoader():
 
         :param str metaphor_dataset_folder: The folder where the metaphor dataset files should be
         :param Vectors glove_vectors: The vector that will be used to embed the words in the metaphor dataset. It could be GloVe for example
+        :param bool lowercase_sentences: Specify whether the sentences should be lowercased before embedding them
+        :param bool tokenize_sentences: Specify whether the sentence words should be tokenized before embedding them
         '''
 
         assert os.path.isdir(

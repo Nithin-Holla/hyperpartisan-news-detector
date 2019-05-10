@@ -49,7 +49,8 @@ def load_glove_vectors(config):
     glove_vectors.stoi['<pad>'] = 1
     unk_vector = torch.zeros((1, glove_vectors.dim))
     pad_vector = torch.mean(glove_vectors.vectors, dim=0, keepdim=True)
-    glove_vectors.vectors = torch.cat((unk_vector, pad_vector, glove_vectors.vectors), dim=0)
+    glove_vectors.vectors = torch.cat(
+        (unk_vector, pad_vector, glove_vectors.vectors), dim=0)
     return glove_vectors
 
 
@@ -87,7 +88,8 @@ def train_model(config):
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
-        print("Resuming training in %s mode from epoch %d with loaded model and optimizer..." % (config.mode, start_epoch))
+        print("Resuming training in %s mode from epoch %d with loaded model and optimizer..." % (
+            config.mode, start_epoch))
     else:
         start_epoch = 1
         print("Training the model in %s mode from scratch..." % config.mode)
@@ -96,8 +98,8 @@ def train_model(config):
     if config.mode in ['hyperpartisan', 'joint']:
         hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
             hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
-            word_vector=glove_vectors,
-            elmo_vectors=config.elmo_embeddings_vectors)
+            glove_vectors=glove_vectors,
+            lowercase_sentences=config.lowercase)
 
         hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
             train_dataset=hyperpartisan_train_dataset,

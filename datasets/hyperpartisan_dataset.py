@@ -15,84 +15,93 @@ from typing import List, Tuple, Dict, Set
 
 import h5py
 
+
 class HyperpartisanDataset(data.Dataset):
 
-	def __init__(self, filename: str, word_vector: Vectors, elmo_vectors: int, elmo_embeddings: int = 1024):
+	def __init__(
+			self,
+			filename: str,
+			glove_vectors: Vectors,
+			lowercase_sentences: bool = False):
 
-		self.word_vector = word_vector
+		self.glove_vectors = glove_vectors
+		self.lowercase_sentences = lowercase_sentences
 
-		self._hyperpartisan, self._title, self._body = self._parse_csv_file(filename, word_vector)
-		
-		self.elmo_embeddings = elmo_embeddings
-		self.elmo_vectors = elmo_vectors
+		self._labels, self._title_tokens, self._body_tokens = self._parse_csv_file(
+			filename)
+
 		self.article_indexes = {}
 		start_index = 0
 
-		for index, current_body in enumerate(self._body):
+		for index, current_body in enumerate(self._body_tokens):
 			end_index = start_index + len(current_body) + 1
 			self.article_indexes[index] = (start_index, end_index)
 			start_index = end_index
 
-		self.elmo_filename = self._assert_elmo_vectors_file(filename, self._title, self._body)
+		self.elmo_filename = self._assert_elmo_vectors_file(
+			filename, self._title_tokens, self._body_tokens)
 
-		self._data_size = len(self._hyperpartisan)
+		self._data_size = len(self._labels)
 
 	def __getitem__(self, idx):
 		start_index, end_index = self.article_indexes[idx]
 
 		elmo_embedding_file = h5py.File(self.elmo_filename, 'r')
-		
-		title = self._title[idx]
-		body = self._body[idx]
 
-		title_indexed_seq = torch.stack([self.word_vector[token] for token in title])
+		title_tokens = self._title_tokens[idx]
+		body_tokens = self._body_tokens[idx]
 
-		body_indexed_seq = []
-		for sentence in body:
-			word_tensors = torch.stack([self.word_vector[token] for token in sentence])
-			body_indexed_seq.append(word_tensors)
+		if self.lowercase_sentences:
+			title_tokens = [token.lower() for token in title_tokens]
+			body_tokens = [token.lower() for token in sentence_tokens for sentence_tokens in title_tokens]
 
-		indexed_seq = [title_indexed_seq] + body_indexed_seq
+		title_glove_embeddings = torch.stack(
+			[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in title_tokens])
 
-		result_sequences = []
+		body_glove_embeddings = []
+		for sentence_tokens in body_tokens:
+			sentence_glove_embeddings = torch.stack(
+				[self.glove_vectors[token] for token in sentence_tokens])
+			body_glove_embeddings.append(sentence_glove_embeddings)
+
+		indexed_seq = [title_glove_embeddings] + body_glove_embeddings
+
+		result_embeddings = []
 		for index in range(start_index, end_index):
 			glove_embeddings = indexed_seq[index - start_index]
-			
-			sentence_elmo_embeddings = elmo_embedding_file[str(index)]
-			elmo_embeddings = torch.cat([torch.Tensor(sentence_elmo_embeddings[i]) for i in range(self.elmo_vectors)], dim=1)
+			elmo_embeddings = torch.Tensor(elmo_embedding_file[str(idx)])
 
-			combined_embeddings = torch.cat([elmo_embeddings, glove_embeddings], dim=1)
-			result_sequences.append(combined_embeddings)
-
+			# elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
+			combined_embeddings = torch.cat(
+				[elmo_embeddings, glove_embeddings], dim=1)
+			result_embeddings.append(combined_embeddings)
 
 		elmo_embedding_file.close()
 
-		hyperpartisan = self._hyperpartisan[idx]
+		is_hyperpartisan = self._labels[idx]
 
-		title_length = len(title)
-		body_length_in_sent = len(body) + 1
-		body_length_in_tokens = [title_length] + [len(sent) for sent in body]
+		title_length = len(title_tokens)
+		body_sentences_amount = len(body_tokens) + 1
+		body_tokens_per_sentence = [title_length] + [len(sentence_tokens) for sentence_tokens in body_tokens]
 
-		assert len(body_length_in_tokens) == len(result_sequences)
+		assert len(body_tokens_per_sentence) == len(result_embeddings)
 
-		return result_sequences, hyperpartisan, body_length_in_tokens, body_length_in_sent
+		return result_embeddings, is_hyperpartisan, body_tokens_per_sentence, body_sentences_amount
 
 	def __len__(self):
 		return self._data_size
 
-	def _parse_csv_file(self, filename: str, embedding_vector: Vectors) \
-			-> Tuple[List[bool], List[str], List[List[str]], Dict[str, torch.Tensor], Set[str]]:
+	def _parse_csv_file(self, filename: str) \
+			-> Tuple[List[bool], List[str], List[List[str]]]:
 		'''
 		Parses the metaphor CSV file and creates the necessary objects for the dataset
 
 		:param str filename: the path to the metaphor CSV dataset file
-		:param Vectors embedding_vector: the vector which will be used for word representation
 		:return: list of all sentences, list of their labels, dictionary of all the word representations and vocabulary with all the unique words
 		'''
-		hyperpartisan = []
+		labels = []
 		title_tokens = []
 		body_tokens = []
-		word_vectors = {}
 
 		with open(filename, 'r', encoding="utf-8") as csv_file:
 			next(csv_file)
@@ -101,39 +110,60 @@ class HyperpartisanDataset(data.Dataset):
 
 			for _, row in enumerate(csv_reader):
 
-				hyperpartisan.append(int(row[4] == "True"))
+				labels.append(int(row[4] == "True"))
 				current_title_tokens = literal_eval(row[2])
-				current_title_tokens = [token.lower() if token not in self.word_vector.stoi else token for token in current_title_tokens]
 
 				title_tokens.append(current_title_tokens)
 
 				current_body_tokens = literal_eval(row[3])
-				current_body_tokens = [[token.lower() if token not in self.word_vector.stoi else token for token in sent] for sent in current_body_tokens]
 
 				body_tokens.append(current_body_tokens)
 
-		return hyperpartisan, title_tokens, body_tokens
+		return labels, title_tokens, body_tokens
 
 	def _assert_elmo_vectors_file(self, csv_filename, title_tokens, body_tokens):
 		dirname = os.path.dirname(csv_filename)
 		filename_without_ext = os.path.splitext(
 			os.path.basename(csv_filename))[0]
-		elmo_filename = os.path.join(dirname, f'{filename_without_ext}.hdf5')
+
+		file_suffix = self._create_elmo_file_suffix()
+		elmo_filename = os.path.join(
+			dirname, f'{filename_without_ext}{file_suffix}.hdf5')
+
 		if not os.path.isfile(elmo_filename):
-			print("caching elmo vectors")
+			print("Caching elmo vectors...")
 			sentences_filename = os.path.join(
-				dirname, f'{filename_without_ext}_elmo.txt')
+				dirname, f'{filename_without_ext}{file_suffix}.txt')
 			with open(sentences_filename, 'w', encoding='utf-8') as sentences_file:
 				for index, article_tokens in enumerate(body_tokens):
 					article_title_tokens = title_tokens[index]
 					title_text = ' '.join(article_title_tokens)
+					
+					if self.lowercase_sentences:
+						title_text = title_text.lower()
+
 					sentences_file.write(f'{title_text}\n')
 
 					for sentence_tokens in article_tokens:
 						sentence_text = ' '.join(sentence_tokens)
+						if self.lowercase_sentences:
+							sentence_text = sentence_text.lower()
+
 						sentences_file.write(f'{sentence_text}\n')
 
 			raise Exception(
-				'Please save the sentences file to elmo file using \'allennlp elmo\' command')
+				f'Please save the sentences file to the file {filename_without_ext}{file_suffix}.hdf5 using \'allennlp elmo\' command')
 
 		return elmo_filename
+
+	def _create_elmo_file_suffix(self):
+		'''
+		Creates a file suffix which includes all current configuration options
+		'''
+
+		file_suffix = '_elmo'
+
+		if self.lowercase_sentences:
+			file_suffix = f'_lowercase{file_suffix}'
+
+		return file_suffix
