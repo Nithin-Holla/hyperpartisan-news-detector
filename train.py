@@ -122,7 +122,7 @@ def train_model(config):
 
         f1_validation_scores = []
 
-    tic = time.clock()
+    tic = time.process_time()
 
     for epoch in range(start_epoch, config.max_epochs + 1):
         print(f'Epoch {epoch}')
@@ -237,7 +237,7 @@ def train_model(config):
                 precision, recall, f1))
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
-                                                             (time.clock() - tic) / 60))
+                                                             (time.process_time() - tic) / 60))
 
     # if config.mode in ['hyperpartisan', 'joint']:
     #     running_loss, running_accu = 0, 0
