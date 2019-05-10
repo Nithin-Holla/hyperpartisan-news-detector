@@ -20,41 +20,49 @@ class MetaphorDataset(data.Dataset):
     def __init__(
             self,
             filename: str,
-            word_vector: Vectors,
-            elmo_vectors: int,
-            elmo_dimensions: int = 1024):
+            glove_vectors: Vectors,
+            lowercase_sentences: bool = False,
+            tokenize_sentences: bool = True):
+
         assert os.path.splitext(
             filename)[1] == '.csv', 'Metaphor dataset file should be of type CSV'
 
-        self._sentences, self._labels = self._parse_csv_file(filename, word_vector)
+        self.glove_vectors = glove_vectors
+        self.tokenizer = WhitespaceTokenizer()
+        self.lowercase_sentences = lowercase_sentences
+        self.tokenize_sentences = tokenize_sentences
+
+        self._sentences, self._labels = self._parse_csv_file(filename)
 
         self.elmo_filename = self._assert_elmo_vectors_file(
             filename, self._sentences)
 
         self._data_size = len(self._sentences)
-        self.word_vector = word_vector
-        self.tokenizer = WhitespaceTokenizer()
-        self.elmo_dimensions = elmo_dimensions
-        self.elmo_vectors = elmo_vectors
 
     def __getitem__(self, idx):
         sentence = self._sentences[idx]
 
-        words = self.tokenizer.tokenize(sentence.lower())
-        words = [word.lower() if word not in self.word_vector.stoi else word for word in words]
+        if self.lowercase_sentences:
+            sentence = sentence.lower()
+
+        if self.tokenize_sentences:
+            words = self.tokenizer.tokenize(sentence)
+        else:
+            words = sentence.split()
+
         sentence_length = len(words)
 
-        indexed_sequence = torch.stack([self.word_vector[x] for x in words])
+        # get the GloVe embedding. If it's missing for this word - try lowercasing it
+        words_embeddings = [
+            self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in words]
+
+        glove_embeddings = torch.stack(words_embeddings)
         elmo_embedding_file = h5py.File(self.elmo_filename, 'r')
-        sentence_elmo_embeddings = elmo_embedding_file[str(idx)]
-        elmo_embeddings = torch.cat([torch.Tensor(sentence_elmo_embeddings[i]) for i in range(self.elmo_vectors)], dim=1)
+        elmo_embeddings = torch.Tensor(elmo_embedding_file[str(idx)])
 
-        # elmo: [ n_words x (1024*3) ]; [ n_words x 300 ] => [ n_words x 1324 ]
-        assert list(elmo_embeddings.size()) == [sentence_length, self.elmo_dimensions * self.elmo_vectors]
-        assert list(indexed_sequence.size()) == [sentence_length, self.word_vector.dim]
-
+        # elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
         combined_embeddings = torch.cat(
-            [elmo_embeddings, indexed_sequence], dim=1)
+            [elmo_embeddings, glove_embeddings], dim=1)
 
         elmo_embedding_file.close()
 
@@ -68,23 +76,22 @@ class MetaphorDataset(data.Dataset):
     def __len__(self):
         return self._data_size
 
-    def _parse_csv_file(self, filename: str, word_vector: Vectors) \
+    def _parse_csv_file(self, filename: str) \
             -> Tuple[List[str], List[bool], Dict[str, torch.Tensor]]:
         '''
         Parses the metaphor CSV file and creates the necessary objects for the dataset
 
         :param str filename: the path to the metaphor CSV dataset file
-        :param Vectors word_vector: the vector which will be used for word representation
         :return: list of all sentences, list of their labels, dictionary of all the word representations
         '''
+        
         sentences = []
         labels = []
-        word_vectors = {}
 
         with open(filename, 'r') as csv_file:
             next(csv_file)  # skip the first line - headers
             csv_reader = csv.reader(csv_file, delimiter=',')
-            for counter, row in enumerate(csv_reader):
+            for row in csv_reader:
                 sentence = row[2]
                 sentence_labels_string = ast.literal_eval(row[3])
                 sentence_labels = [int(n) for n in sentence_labels_string]
@@ -94,19 +101,48 @@ class MetaphorDataset(data.Dataset):
         return sentences, labels
 
     def _assert_elmo_vectors_file(self, csv_filename, sentences):
+        '''
+        Saves the elmo sentences to a text file which will be used to create elmo embeddings after
+        '''
+
         dirname = os.path.dirname(csv_filename)
         filename_without_ext = os.path.splitext(
             os.path.basename(csv_filename))[0]
-        elmo_filename = os.path.join(dirname, f'{filename_without_ext}.hdf5')
+
+        file_suffix = self._create_elmo_file_suffix()
+        elmo_filename = os.path.join(
+            dirname, f'{filename_without_ext}{file_suffix}.hdf5')
         if not os.path.isfile(elmo_filename):
-            print("caching elmo vectors")
+            print("Saving sentences...")
             sentences_filename = os.path.join(
-                dirname, f'{filename_without_ext}.txt')
+                dirname, f'{filename_without_ext}{file_suffix}.txt')
+
             with open(sentences_filename, 'w', encoding='utf-8') as sentences_file:
                 for sentence in sentences:
+                    if self.lowercase_sentences:
+                        sentence = sentence.lower()
+
+                    if self.tokenize_sentences:
+                        sentence = ' '.join(self.tokenizer.tokenize(sentence))
+
                     sentences_file.write(f'{sentence}\n')
 
             raise Exception(
-                'Please save the sentences file to elmo file using \'allennlp elmo\' command')
+                f'Please save the sentences file to the file {filename_without_ext}{file_suffix}.hdf5 using \'allennlp elmo\' command')
 
         return elmo_filename
+
+    def _create_elmo_file_suffix(self):
+        '''
+        Creates a file suffix which includes all current configuration options
+        '''
+
+        file_suffix = '_elmo'
+        
+        if self.lowercase_sentences:
+            file_suffix = f'_lowercase{file_suffix}'
+
+        if self.tokenize_sentences:
+            file_suffix = f'_tokenize{file_suffix}'
+
+        return file_suffix

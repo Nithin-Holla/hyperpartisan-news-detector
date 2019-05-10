@@ -110,8 +110,9 @@ def train_model(config):
     if config.mode in ['metaphor', 'joint']:
         metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
             metaphor_dataset_folder=config.metaphor_dataset_folder,
-            word_vector=glove_vectors,
-            elmo_vectors=config.elmo_embeddings_vectors)
+            glove_vectors=glove_vectors,
+            lowercase_sentences=config.lowercase,
+            tokenize_sentences=not config.not_tokenize)
 
         metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader = DataHelper.create_dataloaders(
             train_dataset=metaphor_train_dataset,
@@ -125,7 +126,6 @@ def train_model(config):
     tic = time.process_time()
 
     for epoch in range(start_epoch, config.max_epochs + 1):
-        print(f'Epoch {epoch}')
         if config.mode in ['metaphor', 'joint']:
 
             model.train()
@@ -165,7 +165,8 @@ def train_model(config):
             current_f1_score = metrics.f1_score(
                 val_targets, val_predictions, average="binary")
             f1_validation_scores.append(current_f1_score)
-            print(f'f1 score: {current_f1_score}')
+            print("[{}] epoch {} || F1: valid = {:.4f}".format(
+                datetime.now().time().replace(microsecond=0), epoch, current_f1_score))
 
         if config.mode in ['hyperpartisan', 'joint']:
 
@@ -200,7 +201,6 @@ def train_model(config):
             valid_targets = []
             valid_pred = []
             model.eval()
-
 
             for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
                     hyperpartisan_validation_dataloader):
@@ -314,6 +314,10 @@ if __name__ == '__main__':
                         help='Elmo embeddings size')
     parser.add_argument('--elmo_embeddings_vectors', type=int, default=1,
                         help='Number of Elmo embeddings vectors')
+    parser.add_argument('--lowercase', action='store_true',
+                        help='Lowercase the sentences before training')
+    parser.add_argument('--not_tokenize', action='store_true',
+                        help='Do not tokenize the sentences before training')
 
     config = parser.parse_args()
 
