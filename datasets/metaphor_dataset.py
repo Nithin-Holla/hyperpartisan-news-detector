@@ -26,8 +26,7 @@ class MetaphorDataset(data.Dataset):
         assert os.path.splitext(
             filename)[1] == '.csv', 'Metaphor dataset file should be of type CSV'
 
-        self._sentences, self._labels, self._word_vectors = self._parse_csv_file(
-            filename, word_vector)
+        self._sentences, self._labels = self._parse_csv_file(filename, word_vector)
 
         self.elmo_filename = self._assert_elmo_vectors_file(
             filename, self._sentences)
@@ -42,6 +41,7 @@ class MetaphorDataset(data.Dataset):
         sentence = self._sentences[idx]
 
         words = self.tokenizer.tokenize(sentence.lower())
+        words = [word.lower() if word not in self.word_vector.stoi else word for word in words]
         sentence_length = len(words)
 
         indexed_sequence = torch.stack([self.word_vector[x] for x in words])
@@ -91,12 +91,7 @@ class MetaphorDataset(data.Dataset):
                 sentences.append(sentence)
                 labels.append(sentence_labels)
 
-                words = sentence.split()
-                for word in words:
-                    if word not in word_vectors.keys():
-                        word_vectors[word] = word_vector[word]
-
-        return sentences, labels, word_vectors
+        return sentences, labels
 
     def _assert_elmo_vectors_file(self, csv_filename, sentences):
         dirname = os.path.dirname(csv_filename)

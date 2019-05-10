@@ -94,15 +94,15 @@ def train_model(config):
 
     # Load hyperpartisan data
     if config.mode in ['hyperpartisan', 'joint']:
-        hyperpartisan_train_dataset, hyperpartisan_validation_dataset, hyperpartisan_test_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
+        hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
             hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
             word_vector=glove_vectors,
             elmo_vectors=config.elmo_embeddings_vectors)
 
-        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, hyperpartisan_test_dataloader = DataHelperHyperpartisan.create_dataloaders(
+        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
             train_dataset=hyperpartisan_train_dataset,
             validation_dataset=hyperpartisan_validation_dataset,
-            test_dataset=hyperpartisan_test_dataset,
+            test_dataset=None,
             batch_size=config.batch_size,
             shuffle=True)
 
@@ -239,45 +239,45 @@ def train_model(config):
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.clock() - tic) / 60))
 
-    if config.mode in ['hyperpartisan', 'joint']:
-        running_loss, running_accu = 0, 0
-        test_targets = []
-        test_pred = []
-        model.eval()
+    # if config.mode in ['hyperpartisan', 'joint']:
+    #     running_loss, running_accu = 0, 0
+    #     test_targets = []
+    #     test_pred = []
+    #     model.eval()
 
-        for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
-                hyperpartisan_test_dataloader):
-            h_batch_inputs = h_batch_inputs.to(device)
-            h_batch_targets = h_batch_targets.to(device)
-            h_batch_recover_idx = h_batch_recover_idx.to(device)
-            h_batch_num_sent = h_batch_num_sent.to(device)
-            h_batch_sent_lengths = h_batch_sent_lengths.to(device)
+    #     for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
+    #             hyperpartisan_test_dataloader):
+    #         h_batch_inputs = h_batch_inputs.to(device)
+    #         h_batch_targets = h_batch_targets.to(device)
+    #         h_batch_recover_idx = h_batch_recover_idx.to(device)
+    #         h_batch_num_sent = h_batch_num_sent.to(device)
+    #         h_batch_sent_lengths = h_batch_sent_lengths.to(device)
 
-            with torch.no_grad():
+    #         with torch.no_grad():
 
-                pred = model(h_batch_inputs, (h_batch_recover_idx,
-                                              h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
+    #             pred = model(h_batch_inputs, (h_batch_recover_idx,
+    #                                           h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
 
-                loss = hyperpartisan_criterion(pred, h_batch_targets)
-                accu = get_accuracy(pred, h_batch_targets)
+    #             loss = hyperpartisan_criterion(pred, h_batch_targets)
+    #             accu = get_accuracy(pred, h_batch_targets)
 
-                running_loss += loss.item()
-                running_accu += accu.item()
+    #             running_loss += loss.item()
+    #             running_accu += accu.item()
 
-                test_targets += h_batch_targets.long().tolist()
-                test_pred += pred.round().long().tolist()
+    #             test_targets += h_batch_targets.long().tolist()
+    #             test_pred += pred.round().long().tolist()
 
-        loss_test = running_loss / (step + 1)
-        accu_test = running_accu / (step + 1)
+    #     loss_test = running_loss / (step + 1)
+    #     accu_test = running_accu / (step + 1)
 
-        precision = metrics.precision_score(test_targets, test_pred, average="binary")
-        recall = metrics.recall_score(test_targets, test_pred, average="binary")
-        f1 = metrics.f1_score(test_targets, test_pred, average="binary")
+    #     precision = metrics.precision_score(test_targets, test_pred, average="binary")
+    #     recall = metrics.recall_score(test_targets, test_pred, average="binary")
+    #     f1 = metrics.f1_score(test_targets, test_pred, average="binary")
 
-        print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
-            datetime.now().time().replace(microsecond=0), loss_test, accu_test))
-        print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
-            precision, recall, f1))
+    #     print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
+    #         datetime.now().time().replace(microsecond=0), loss_test, accu_test))
+    #     print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+    #         precision, recall, f1))
 
 
 if __name__ == '__main__':

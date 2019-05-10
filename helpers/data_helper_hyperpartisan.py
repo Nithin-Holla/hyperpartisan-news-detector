@@ -15,7 +15,7 @@ class DataHelperHyperpartisan():
             validation_dataset: data.Dataset = None,
             test_dataset: data.Dataset = None,
             batch_size: int = 32,
-            shuffle: bool = True) -> Tuple[data.DataLoader, data.DataLoader, data.DataLoader]:
+            shuffle: bool = True) -> Tuple[data.DataLoader, data.DataLoader]:
         '''
         Creates DataLoader objects for the given datasets while 
         including padding and sorting
@@ -39,16 +39,16 @@ class DataHelperHyperpartisan():
                 shuffle=shuffle,
                 collate_fn=cls._pad_and_sort_batch)
 
-        test_loader = None
-        if test_dataset:
-            test_loader = data.DataLoader(
-                dataset=test_dataset,
-                batch_size=batch_size,
-                num_workers=1,
-                shuffle=shuffle,
-                collate_fn=cls._pad_and_sort_batch)
+        # test_loader = None
+        # if test_dataset:
+        #     test_loader = data.DataLoader(
+        #         dataset=test_dataset,
+        #         batch_size=batch_size,
+        #         num_workers=1,
+        #         shuffle=shuffle,
+        #         collate_fn=cls._pad_and_sort_batch)
 
-        return train_loader, validation_loader, test_loader
+        return train_loader, validation_loader
 
     @classmethod
     def _sort_batch(cls, batch, targets, num_sentences, lengths):

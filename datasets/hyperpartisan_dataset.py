@@ -19,8 +19,9 @@ class HyperpartisanDataset(data.Dataset):
 
 	def __init__(self, filename: str, word_vector: Vectors, elmo_vectors: int, elmo_embeddings: int = 1024):
 
-		self._hyperpartisan, self._title, self._body, self._word_vectors = self._parse_csv_file(
-			filename, word_vector)
+		self.word_vector = word_vector
+
+		self._hyperpartisan, self._title, self._body = self._parse_csv_file(filename, word_vector)
 		
 		self.elmo_embeddings = elmo_embeddings
 		self.elmo_vectors = elmo_vectors
@@ -35,7 +36,6 @@ class HyperpartisanDataset(data.Dataset):
 		self.elmo_filename = self._assert_elmo_vectors_file(filename, self._title, self._body)
 
 		self._data_size = len(self._hyperpartisan)
-		self.word_vector = word_vector
 
 	def __getitem__(self, idx):
 		start_index, end_index = self.article_indexes[idx]
@@ -101,18 +101,18 @@ class HyperpartisanDataset(data.Dataset):
 
 			for _, row in enumerate(csv_reader):
 
-				hyperpartisan.append(int(row[1]))
+				hyperpartisan.append(int(row[4] == "True"))
 				current_title_tokens = literal_eval(row[2])
+				current_title_tokens = [token.lower() if token not in self.word_vector.stoi else token for token in current_title_tokens]
+
 				title_tokens.append(current_title_tokens)
 
-				for token in title_tokens[-1]:
-					if token not in word_vectors.keys():
-						word_vectors[token] = embedding_vector[token]
+				current_body_tokens = literal_eval(row[3])
+				current_body_tokens = [[token.lower() if token not in self.word_vector.stoi else token for token in sent] for sent in current_body_tokens]
 
-				current_body_tokens = literal_eval(row[4])
 				body_tokens.append(current_body_tokens)
 
-		return hyperpartisan, title_tokens, body_tokens, word_vectors
+		return hyperpartisan, title_tokens, body_tokens
 
 	def _assert_elmo_vectors_file(self, csv_filename, title_tokens, body_tokens):
 		dirname = os.path.dirname(csv_filename)
