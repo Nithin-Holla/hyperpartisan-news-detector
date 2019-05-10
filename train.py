@@ -13,6 +13,7 @@ from datasets.metaphor_dataset import MetaphorDataset
 from helpers.metaphor_loader import MetaphorLoader
 from helpers.data_helper import DataHelper
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
+from helpers.argument_parser_helper import ArgumentParserHelper
 from model.JointModel import JointModel
 
 from enums.training_mode import TrainingMode
@@ -50,12 +51,12 @@ def get_accuracy(prediction_scores, targets):
     return accuracy
 
 
-def load_glove_vectors(config):
+def load_glove_vectors(argument_parser: ArgumentParserHelper):
     print('Loading GloVe vectors...\r', end='')
 
-    glove_vectors = torchtext.vocab.Vectors(name=config.vector_file_name,
-                                            cache=config.vector_cache_dir,
-                                            max_vectors=config.glove_size)
+    glove_vectors = torchtext.vocab.Vectors(name=argument_parser.vector_file_name,
+                                            cache=argument_parser.vector_cache_dir,
+                                            max_vectors=argument_parser.glove_size)
     glove_vectors.stoi = {k: v+2 for (k, v) in glove_vectors.stoi.items()}
     glove_vectors.itos = ['<unk>', '<pad>'] + glove_vectors.itos
     glove_vectors.stoi['<unk>'] = 0
@@ -69,18 +70,18 @@ def load_glove_vectors(config):
 
     return glove_vectors
 
-def initialize_model(config, device, glove_vectors_dim):
+def initialize_model(argument_parser: ArgumentParserHelper, device, glove_vectors_dim):
     print('Loading model state...\r', end='')
 
     total_embedding_dim = elmo_vectors_size + glove_vectors_dim
 
-    joint_model = JointModel(embedding_dim=total_embedding_dim, hidden_dim=config.hidden_dim, device=device).to(device)
+    joint_model = JointModel(embedding_dim=total_embedding_dim, hidden_dim=argument_parser.hidden_dim, device=device).to(device)
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, joint_model.parameters()),
-                           lr=config.learning_rate, weight_decay=config.weight_decay)
+                           lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
     # Load the checkpoint if found
-    if os.path.isfile(config.checkpoint_path):
-        checkpoint = torch.load(config.checkpoint_path)
+    if os.path.isfile(argument_parser.checkpoint_path):
+        checkpoint = torch.load(argument_parser.checkpoint_path)
         joint_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
@@ -89,38 +90,38 @@ def initialize_model(config, device, glove_vectors_dim):
         start_epoch = 1
         print('Loading model state...Done')
 
-    print("Starting training in '%s' mode from epoch %d..." % (config.mode, start_epoch))
+    print("Starting training in '%s' mode from epoch %d..." % (argument_parser.mode, start_epoch))
 
     return joint_model, optimizer, start_epoch
 
-def create_hyperpartisan_loaders(config, glove_vectors):
+def create_hyperpartisan_loaders(argument_parser: ArgumentParserHelper, glove_vectors):
     hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
-        hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
+        hyperpartisan_dataset_folder=argument_parser.hyperpartisan_dataset_folder,
         glove_vectors=glove_vectors,
-        lowercase_sentences=config.lowercase)
+        lowercase_sentences=argument_parser.lowercase)
 
     hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
         train_dataset=hyperpartisan_train_dataset,
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=None,
-        batch_size=config.batch_size,
+        batch_size=argument_parser.batch_size,
         shuffle=True)
 
     return hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader
 
-def create_metaphor_loaders(config, glove_vectors):
+def create_metaphor_loaders(argument_parser: ArgumentParserHelper, glove_vectors):
     metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
-        metaphor_dataset_folder=config.metaphor_dataset_folder,
+        metaphor_dataset_folder=argument_parser.metaphor_dataset_folder,
         glove_vectors=glove_vectors,
-        lowercase_sentences=config.lowercase,
-        tokenize_sentences=not config.not_tokenize,
-        only_news=config.only_news)
+        lowercase_sentences=argument_parser.lowercase,
+        tokenize_sentences=argument_parser.tokenize,
+        only_news=argument_parser.only_news)
 
     metaphor_train_dataloader, metaphor_validation_dataloader, _ = DataHelper.create_dataloaders(
         train_dataset=metaphor_train_dataset,
         validation_dataset=metaphor_validation_dataset,
         test_dataset=metaphor_test_dataset,
-        batch_size=config.batch_size,
+        batch_size=argument_parser.batch_size,
         shuffle=True)
 
     return metaphor_train_dataloader, metaphor_validation_dataloader
@@ -261,42 +262,42 @@ def forward_full_metaphor(
 
     return all_targets, all_predictions
 
-def train_model(config):
+def train_model(argument_parser: ArgumentParserHelper):
     """
     Train the multi-task classifier model
-    :param config: Dictionary specifying the model configuration
+    :param argument_parser: Dictionary specifying the model configuration
     :return: None
     """
     # Flags for deterministic runs
-    if config.deterministic:
+    if argument_parser.deterministic:
         initialize_deterministic_mode()
 
     # Set device
     device = torch.device("cuda:0")  # if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = load_glove_vectors(config)
+    glove_vectors = load_glove_vectors(argument_parser)
 
     # Define the model, the optimizer and the loss module
-    joint_model, optimizer, start_epoch = initialize_model(config, device, glove_vectors.dim)
+    joint_model, optimizer, start_epoch = initialize_model(argument_parser, device, glove_vectors.dim)
 
     metaphor_criterion = nn.BCELoss()
     hyperpartisan_criterion = nn.BCELoss()
 
     # Load hyperpartisan data
-    if config.mode == TrainingMode.Hyperpartisan or config.mode == TrainingMode.Joint:
-        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = create_hyperpartisan_loaders(config, glove_vectors)
+    if argument_parser.mode == TrainingMode.Hyperpartisan or argument_parser.mode == TrainingMode.Joint:
+        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = create_hyperpartisan_loaders(argument_parser, glove_vectors)
 
     # Load metaphor data
-    if config.mode == TrainingMode.Metaphor or config.mode == TrainingMode.Joint:
-        metaphor_train_dataloader, metaphor_validation_dataloader = create_metaphor_loaders(config, glove_vectors)
+    if argument_parser.mode == TrainingMode.Metaphor or argument_parser.mode == TrainingMode.Joint:
+        metaphor_train_dataloader, metaphor_validation_dataloader = create_metaphor_loaders(argument_parser, glove_vectors)
     
     f1_validation_scores = []
 
     tic = time.process_time()
 
-    for epoch in range(start_epoch, config.max_epochs + 1):
-        if config.mode == TrainingMode.Metaphor or config.mode == TrainingMode.Joint:
+    for epoch in range(start_epoch, argument_parser.max_epochs + 1):
+        if argument_parser.mode == TrainingMode.Metaphor or argument_parser.mode == TrainingMode.Joint:
 
             joint_model.train()
             
@@ -323,7 +324,7 @@ def train_model(config):
             print("[{}] epoch {} || F1: valid = {:.4f}".format(
                 datetime.now().time().replace(microsecond=0), epoch, current_f1_score))
 
-        if config.mode == TrainingMode.Hyperpartisan or config.mode == TrainingMode.Joint:
+        if argument_parser.mode == TrainingMode.Hyperpartisan or argument_parser.mode == TrainingMode.Joint:
             joint_model.train()
 
             loss_train, accuracy_train, _, _ = forward_full_hyperpartisan(
@@ -355,44 +356,7 @@ def train_model(config):
                                                              (time.process_time() - tic) / 60))
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint_path', type=str, required=True,
-                        help='Path to save/load the checkpoint data')
-    parser.add_argument('--data_path', type=str,
-                        help='Path where data is saved')
-    parser.add_argument('--vector_file_name', type=str, required=True,
-                        help='File in which vectors are saved')
-    parser.add_argument('--vector_cache_dir', type=str, default='.vector_cache',
-                        help='Directory where vectors would be cached')
-    parser.add_argument('--embedding_dimension', type=int, default=300,
-                        help='Dimensions of the vector embeddings')
-    parser.add_argument('--learning_rate', type=float, default=2e-3,
-                        help='Learning rate')
-    parser.add_argument('--max_epochs', type=int, default=5,
-                        help='Maximum number of epochs to train the model')
-    parser.add_argument('--batch_size', type=int, default=16,
-                        help='Batch size for training the model')
-    parser.add_argument('--hidden_dim', type=int, default=100,
-                        help='Hidden dimension of the recurrent network')
-    parser.add_argument('--glove_size', type=int,
-                        help='Number of GloVe vectors to load initially')
-    parser.add_argument('--weight_decay', type=float, default=0,
-                        help='Weight decay for the optimizer')
-    parser.add_argument('--metaphor_dataset_folder', type=str, required=True,
-                        help='Path to the metaphor dataset')
-    parser.add_argument('--hyperpartisan_dataset_folder', type=str,
-                        help='Path to the hyperpartisan dataset')
-    parser.add_argument('--mode', type=TrainingMode, choices=list(TrainingMode), required=True,
-                        help='The mode in which to train the model')
-    parser.add_argument('--lowercase', action='store_true',
-                        help='Lowercase the sentences before training')
-    parser.add_argument('--not_tokenize', action='store_true',
-                        help='Do not tokenize the sentences before training')
-    parser.add_argument('--only_news', action='store_true',
-                        help='Use only metaphors which have News as genre')
-    parser.add_argument('--deterministic', action='store_true',
-                        help='Make sure the training is done deterministically')
+    argument_parser = ArgumentParserHelper()
+    argument_parser.parse_arguments()
 
-    config = parser.parse_args()
-
-    train_model(config)
+    train_model(argument_parser)
