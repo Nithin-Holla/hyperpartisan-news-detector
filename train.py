@@ -114,7 +114,8 @@ def train_model(config):
             metaphor_dataset_folder=config.metaphor_dataset_folder,
             glove_vectors=glove_vectors,
             lowercase_sentences=config.lowercase,
-            tokenize_sentences=not config.not_tokenize)
+            tokenize_sentences=not config.not_tokenize,
+            only_news=config.only_news)
 
         metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader = DataHelper.create_dataloaders(
             train_dataset=metaphor_train_dataset,
@@ -320,6 +321,8 @@ if __name__ == '__main__':
                         help='Lowercase the sentences before training')
     parser.add_argument('--not_tokenize', action='store_true',
                         help='Do not tokenize the sentences before training')
+    parser.add_argument('--only_news', action='store_true',
+                        help='Use only metaphors which have News as genre')
 
     config = parser.parse_args()
 

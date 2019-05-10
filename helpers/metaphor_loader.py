@@ -14,7 +14,8 @@ class MetaphorLoader():
             metaphor_dataset_folder: str,
             glove_vectors: Vectors,
             lowercase_sentences: bool = False,
-            tokenize_sentences: bool = True) -> Tuple[MetaphorDataset, MetaphorDataset, MetaphorDataset]:
+            tokenize_sentences: bool = True,
+            only_news: bool = False) -> Tuple[MetaphorDataset, MetaphorDataset, MetaphorDataset]:
         '''
         Parses the metaphor files and creates MetaphorDataset objects which
         include information about the vocabulary and the embedding of the sentences
@@ -23,6 +24,7 @@ class MetaphorLoader():
         :param Vectors glove_vectors: The vector that will be used to embed the words in the metaphor dataset. It could be GloVe for example
         :param bool lowercase_sentences: Specify whether the sentences should be lowercased before embedding them
         :param bool tokenize_sentences: Specify whether the sentence words should be tokenized before embedding them
+        :param bool only_news: Use only metaphors of genre 'news' when loading data
         '''
 
         assert os.path.isdir(
@@ -36,7 +38,8 @@ class MetaphorLoader():
             filename=train_filepath,
             glove_vectors=glove_vectors,
             lowercase_sentences=lowercase_sentences,
-            tokenize_sentences=tokenize_sentences)
+            tokenize_sentences=tokenize_sentences,
+            only_news=only_news)
 
         # Validation
         validation_filepath = os.path.join(
@@ -46,7 +49,8 @@ class MetaphorLoader():
             filename=validation_filepath,
             glove_vectors=glove_vectors,
             lowercase_sentences=lowercase_sentences,
-            tokenize_sentences=tokenize_sentences)
+            tokenize_sentences=tokenize_sentences,
+            only_news=only_news)
 
         # Test
         test_filepath = os.path.join(
@@ -56,6 +60,7 @@ class MetaphorLoader():
             filename=test_filepath,
             glove_vectors=glove_vectors,
             lowercase_sentences=lowercase_sentences,
-            tokenize_sentences=tokenize_sentences)
+            tokenize_sentences=tokenize_sentences,
+            only_news=only_news)
 
         return train_dataset, validation_dataset, test_dataset
