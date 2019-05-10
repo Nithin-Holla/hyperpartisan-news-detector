@@ -176,6 +176,9 @@ def forward_full_hyperpartisan(
 
     all_targets = []
     all_predictions = []
+    
+    running_loss = 0
+    running_accuracy = 0
 
     for step, (batch_inputs, batch_targets, batch_recover_idx, batch_num_sent, batch_sent_lengths) in enumerate(dataloader):
 
