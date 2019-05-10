@@ -22,7 +22,8 @@ class MetaphorDataset(data.Dataset):
             filename: str,
             glove_vectors: Vectors,
             lowercase_sentences: bool = False,
-            tokenize_sentences: bool = True):
+            tokenize_sentences: bool = True,
+            only_news: bool = False):
 
         assert os.path.splitext(
             filename)[1] == '.csv', 'Metaphor dataset file should be of type CSV'
@@ -31,6 +32,7 @@ class MetaphorDataset(data.Dataset):
         self.tokenizer = WhitespaceTokenizer()
         self.lowercase_sentences = lowercase_sentences
         self.tokenize_sentences = tokenize_sentences
+        self.only_news = only_news
 
         self._sentences, self._labels = self._parse_csv_file(filename)
 
@@ -92,6 +94,11 @@ class MetaphorDataset(data.Dataset):
             next(csv_file)  # skip the first line - headers
             csv_reader = csv.reader(csv_file, delimiter=',')
             for row in csv_reader:
+                if self.only_news:
+                    genre = row[6]
+                    if genre != 'news':
+                        continue
+
                 sentence = row[2]
                 sentence_labels_string = ast.literal_eval(row[3])
                 sentence_labels = [int(n) for n in sentence_labels_string]
@@ -138,6 +145,9 @@ class MetaphorDataset(data.Dataset):
         '''
 
         file_suffix = '_elmo'
+
+        if self.only_news:
+            file_suffix = f'_only_news{file_suffix}'
         
         if self.lowercase_sentences:
             file_suffix = f'_lowercase{file_suffix}'
