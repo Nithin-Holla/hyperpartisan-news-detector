@@ -15,31 +15,44 @@ from helpers.data_helper import DataHelper
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 from model.JointModel import JointModel
 
+from enums.training_mode import TrainingMode
+
 from sklearn import metrics
 from datetime import datetime
 import time
 
+elmo_vectors_size = 1024
 
-def get_accuracy(pred_scores, targets):
+def initialize_deterministic_mode():
+    print('Initializing deterministic mode')
+    
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+def get_accuracy(prediction_scores, targets):
     """
     Calculate the accuracy
-    :param pred_scores: Scores obtained by the model
+    :param prediction_scores: Scores obtained by the model
     :param targets: Ground truth targets
     :return: Accuracy
     """
-    binary = len(pred_scores.shape) == 1
+    binary = len(prediction_scores.shape) == 1
 
     if binary:
-        pred = pred_scores > 0.5
-        accuracy = torch.sum(pred == targets.byte()).float() / pred.shape[0]
+        prediction = prediction_scores > 0.5
+        accuracy = torch.sum(prediction == targets.byte()).float() / prediction.shape[0]
     else:
-        pred = torch.argmax(pred_scores, dim=1)
-        accuracy = torch.mean((pred == targets).float())
+        prediction = torch.argmax(prediction_scores, dim=1)
+        accuracy = torch.mean((prediction == targets).float())
 
     return accuracy
 
 
 def load_glove_vectors(config):
+    print('Loading GloVe vectors...\r', end='')
+
     glove_vectors = torchtext.vocab.Vectors(name=config.vector_file_name,
                                             cache=config.vector_cache_dir,
                                             max_vectors=config.glove_size)
@@ -51,8 +64,199 @@ def load_glove_vectors(config):
     pad_vector = torch.mean(glove_vectors.vectors, dim=0, keepdim=True)
     glove_vectors.vectors = torch.cat(
         (unk_vector, pad_vector, glove_vectors.vectors), dim=0)
+
+    print('Loading GloVe vectors...Done')
+
     return glove_vectors
 
+def initialize_model(config, device, glove_vectors_dim):
+    print('Loading model state...\r', end='')
+
+    total_embedding_dim = elmo_vectors_size + glove_vectors_dim
+
+    joint_model = JointModel(embedding_dim=total_embedding_dim, hidden_dim=config.hidden_dim, device=device).to(device)
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, joint_model.parameters()),
+                           lr=config.learning_rate, weight_decay=config.weight_decay)
+
+    # Load the checkpoint if found
+    if os.path.isfile(config.checkpoint_path):
+        checkpoint = torch.load(config.checkpoint_path)
+        joint_model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        print('Found previous model state')
+    else:
+        start_epoch = 1
+        print('Loading model state...Done')
+
+    print("Starting training in '%s' mode from epoch %d..." % (config.mode, start_epoch))
+
+    return joint_model, optimizer, start_epoch
+
+def create_hyperpartisan_loaders(config, glove_vectors):
+    hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
+        hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
+        glove_vectors=glove_vectors,
+        lowercase_sentences=config.lowercase)
+
+    hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
+        train_dataset=hyperpartisan_train_dataset,
+        validation_dataset=hyperpartisan_validation_dataset,
+        test_dataset=None,
+        batch_size=config.batch_size,
+        shuffle=True)
+
+    return hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader
+
+def create_metaphor_loaders(config, glove_vectors):
+    metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
+        metaphor_dataset_folder=config.metaphor_dataset_folder,
+        glove_vectors=glove_vectors,
+        lowercase_sentences=config.lowercase,
+        tokenize_sentences=not config.not_tokenize,
+        only_news=config.only_news)
+
+    metaphor_train_dataloader, metaphor_validation_dataloader, _ = DataHelper.create_dataloaders(
+        train_dataset=metaphor_train_dataset,
+        validation_dataset=metaphor_validation_dataset,
+        test_dataset=metaphor_test_dataset,
+        batch_size=config.batch_size,
+        shuffle=True)
+
+    return metaphor_train_dataloader, metaphor_validation_dataloader
+
+def calculate_metrics(targets, predictions):
+    precision = metrics.precision_score(targets, predictions, average = "binary")
+    recall = metrics.recall_score(targets, predictions, average = "binary")
+    f1 = metrics.f1_score(targets, predictions, average="binary")
+
+    return f1, precision, recall
+
+def iterate_hyperpartisan(
+    joint_model,
+    optimizer,
+    criterion,
+    batch_inputs,
+    batch_targets,
+    batch_recover_idx,
+    batch_num_sent,
+    batch_sent_lengths,
+    device,
+    train: bool = False):
+
+    batch_inputs = batch_inputs.to(device)
+    batch_targets = batch_targets.to(device)
+    batch_recover_idx = batch_recover_idx.to(device)
+    batch_num_sent = batch_num_sent.to(device)
+    batch_sent_lengths = batch_sent_lengths.to(device)
+
+    if train:
+        optimizer.zero_grad()
+        
+    predictions = joint_model.forward(batch_inputs, (batch_recover_idx,
+                                    batch_num_sent, batch_sent_lengths), task=TrainingMode.Hyperpartisan)
+
+    loss = criterion.forward(predictions, batch_targets)
+    
+    if train:
+        loss.backward()
+        optimizer.step()
+
+    accuracy = get_accuracy(predictions, batch_targets)
+
+    return loss.item(), accuracy.item(), batch_targets.long().tolist(), predictions.round().long().tolist()
+
+def forward_full_hyperpartisan(
+    joint_model,
+    optimizer,
+    criterion,
+    dataloader,
+    device,
+    train: bool = False):
+
+    all_targets = []
+    all_predictions = []
+
+    for step, (batch_inputs, batch_targets, batch_recover_idx, batch_num_sent, batch_sent_lengths) in enumerate(dataloader):
+
+        loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
+            joint_model=joint_model,
+            optimizer=optimizer,
+            criterion=criterion,
+            batch_inputs=batch_inputs,
+            batch_targets=batch_targets,
+            batch_recover_idx=batch_recover_idx,
+            batch_num_sent=batch_num_sent,
+            batch_sent_lengths=batch_sent_lengths,
+            device=device,
+            train=train)
+
+        running_loss += loss
+        running_accuracy += accuracy
+        all_targets += batch_targets
+        all_predictions += batch_predictions
+
+    final_loss = running_loss / (step + 1)
+    final_accuracy = running_accuracy / (step + 1)
+
+    return final_loss, final_accuracy, all_targets, all_predictions
+
+def iterate_metaphor(
+    joint_model,
+    optimizer,
+    criterion,
+    batch_inputs,
+    batch_targets,
+    batch_lengths,
+    device,
+    train: bool = False):
+    batch_inputs = batch_inputs.to(device).float()
+    batch_targets = batch_targets.to(device).view(-1).float()
+    batch_lengths = batch_lengths.to(device)
+
+    if train:
+        optimizer.zero_grad()
+
+    predictions = joint_model.forward(batch_inputs, batch_lengths, task=TrainingMode.Metaphor)
+    
+    unpadded_targets = batch_targets[batch_targets != -1]
+    unpadded_predictions = predictions.view(-1)[batch_targets != -1]
+    
+    loss = criterion.forward(unpadded_predictions, unpadded_targets)
+    
+    if train:
+        loss.backward()
+        optimizer.step()
+
+    return unpadded_targets.long().tolist(), unpadded_predictions.round().long().tolist()
+
+def forward_full_metaphor(
+    joint_model,
+    optimizer,
+    criterion,
+    dataloader,
+    device,
+    train: bool = False):
+
+    all_targets = []
+    all_predictions = []
+
+    for _, (batch_inputs, batch_targets, batch_lengths) in enumerate(dataloader):
+
+        batch_targets, batch_predictions = iterate_metaphor(
+            joint_model=joint_model,
+            optimizer=optimizer,
+            criterion=criterion,
+            batch_inputs=batch_inputs,
+            batch_targets=batch_targets,
+            batch_lengths=batch_lengths,
+            device=device,
+            train=train)
+
+        all_targets.extend(batch_targets)
+        all_predictions.extend(batch_predictions)
+
+    return all_targets, all_predictions
 
 def train_model(config):
     """
@@ -61,227 +265,91 @@ def train_model(config):
     :return: None
     """
     # Flags for deterministic runs
-    torch.manual_seed(42)
-    torch.cuda.manual_seed(42)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    if config.deterministic:
+        initialize_deterministic_mode()
 
     # Set device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0")  # if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
     glove_vectors = load_glove_vectors(config)
 
     # Define the model, the optimizer and the loss module
-    total_embedding_dim = (config.elmo_embeddings_size *
-                           config.elmo_embeddings_vectors) + glove_vectors.dim
+    joint_model, optimizer, start_epoch = initialize_model(config, device, glove_vectors.dim)
 
-    model = JointModel(embedding_dim=total_embedding_dim, hidden_dim=config.hidden_dim, device=device).to(device)
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                              lr=config.learning_rate, weight_decay=config.weight_decay)
     metaphor_criterion = nn.BCELoss()
     hyperpartisan_criterion = nn.BCELoss()
 
-    # Load the checkpoint if found
-    if os.path.isfile(config.checkpoint_path):
-        checkpoint = torch.load(config.checkpoint_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_epoch = checkpoint['epoch'] + 1
-        print("Resuming training in %s mode from epoch %d with loaded model and optimizer..." % (
-            config.mode, start_epoch))
-    else:
-        start_epoch = 1
-        print("Training the model in %s mode from scratch..." % config.mode)
-
     # Load hyperpartisan data
-    if config.mode in ['hyperpartisan', 'joint']:
-        hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
-            hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
-            glove_vectors=glove_vectors,
-            lowercase_sentences=config.lowercase)
-
-        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
-            train_dataset=hyperpartisan_train_dataset,
-            validation_dataset=hyperpartisan_validation_dataset,
-            test_dataset=None,
-            batch_size=config.batch_size,
-            shuffle=True)
+    if config.mode == TrainingMode.Hyperpartisan or config.mode == TrainingMode.Joint:
+        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = create_hyperpartisan_loaders(config, glove_vectors)
 
     # Load metaphor data
-    if config.mode in ['metaphor', 'joint']:
-        metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
-            metaphor_dataset_folder=config.metaphor_dataset_folder,
-            glove_vectors=glove_vectors,
-            lowercase_sentences=config.lowercase,
-            tokenize_sentences=not config.not_tokenize,
-            only_news=config.only_news)
-
-        metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader = DataHelper.create_dataloaders(
-            train_dataset=metaphor_train_dataset,
-            validation_dataset=metaphor_validation_dataset,
-            test_dataset=metaphor_test_dataset,
-            batch_size=config.batch_size,
-            shuffle=True)
-
-        f1_validation_scores = []
+    if config.mode == TrainingMode.Metaphor or config.mode == TrainingMode.Joint:
+        metaphor_train_dataloader, metaphor_validation_dataloader = create_metaphor_loaders(config, glove_vectors)
+    
+    f1_validation_scores = []
 
     tic = time.process_time()
 
     for epoch in range(start_epoch, config.max_epochs + 1):
-        if config.mode in ['metaphor', 'joint']:
+        if config.mode == TrainingMode.Metaphor or config.mode == TrainingMode.Joint:
 
-            model.train()
-            for _, (m_batch_inputs, m_batch_targets, m_batch_lengths) in enumerate(metaphor_train_dataloader):
-                m_batch_inputs = m_batch_inputs.to(device).float()
-                m_batch_targets = m_batch_targets.to(device).view(-1).float()
-                m_batch_lengths = m_batch_lengths.to(device)
+            joint_model.train()
+            
+            forward_full_metaphor(
+                joint_model=joint_model,
+                optimizer=optimizer,
+                criterion=metaphor_criterion,
+                dataloader=metaphor_train_dataloader,
+                device=device,
+                train=True)
 
-                optimizer.zero_grad()
+            joint_model.eval()
+            
+            val_targets, val_predictions = forward_full_metaphor(
+                joint_model=joint_model,
+                optimizer=None,
+                criterion=metaphor_criterion,
+                dataloader=metaphor_validation_dataloader,
+                device=device)
 
-                pred = model(m_batch_inputs, m_batch_lengths, task='metaphor')
-                unpad_targets = m_batch_targets[m_batch_targets != -1]
-                unpad_pred = pred.view(-1)[m_batch_targets != -1]
-                loss = metaphor_criterion(unpad_pred, unpad_targets)
-                loss.backward()
-                optimizer.step()
-
-            model.eval()
-
-            val_targets = []
-            val_predictions = []
-            for _, (m_val_batch_inputs, m_val_batch_targets, m_val_batch_lengths) in enumerate(
-                    metaphor_validation_dataloader):
-                m_val_batch_inputs = m_val_batch_inputs.to(device).float()
-                m_val_batch_targets = m_val_batch_targets.to(
-                    device).view(-1).float()
-                m_val_batch_lengths = m_val_batch_lengths.to(device)
-
-                pred = model(m_val_batch_inputs,
-                             m_val_batch_lengths, task='metaphor')
-                unpad_targets = m_val_batch_targets[m_val_batch_targets != -1]
-                unpad_pred = pred.view(-1)[m_val_batch_targets != -1]
-
-                val_targets.extend(unpad_targets.tolist())
-                val_predictions.extend(unpad_pred.round().tolist())
-
-            current_f1_score = metrics.f1_score(
-                val_targets, val_predictions, average="binary")
+            current_f1_score = metrics.f1_score(val_targets, val_predictions, average="binary")
             f1_validation_scores.append(current_f1_score)
+            
             print("[{}] epoch {} || F1: valid = {:.4f}".format(
                 datetime.now().time().replace(microsecond=0), epoch, current_f1_score))
 
-        if config.mode in ['hyperpartisan', 'joint']:
+        if config.mode == TrainingMode.Hyperpartisan or config.mode == TrainingMode.Joint:
+            joint_model.train()
 
-            running_loss, running_accu = 0, 0
-            model.train()
+            loss_train, accuracy_train, _, _ = forward_full_hyperpartisan(
+                joint_model=joint_model,
+                optimizer=optimizer,
+                criterion=hyperpartisan_criterion,
+                dataloader=hyperpartisan_train_dataloader,
+                device=device,
+                train=True)
 
-            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
-                    hyperpartisan_train_dataloader):
-                h_batch_inputs = h_batch_inputs.to(device)
-                h_batch_targets = h_batch_targets.to(device)
-                h_batch_recover_idx = h_batch_recover_idx.to(device)
-                h_batch_num_sent = h_batch_num_sent.to(device)
-                h_batch_sent_lengths = h_batch_sent_lengths.to(device)
+            joint_model.eval()
 
-                optimizer.zero_grad()
-                pred = model(h_batch_inputs, (h_batch_recover_idx,
-                                              h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
+            loss_valid, accuracy_valid, valid_targets, valid_predictions = forward_full_hyperpartisan(
+                joint_model=joint_model,
+                optimizer=None,
+                criterion=hyperpartisan_criterion,
+                dataloader=hyperpartisan_validation_dataloader,
+                device=device)
 
-                loss = hyperpartisan_criterion(pred, h_batch_targets)
-                running_loss += loss.item()
-
-                loss.backward()
-                optimizer.step()
-
-                accuracy = get_accuracy(pred, h_batch_targets)
-                running_accu += accuracy.item()
-
-            loss_train = running_loss / (step + 1)
-            accu_train = running_accu / (step + 1)
-
-            running_loss, running_accu = 0, 0
-            valid_targets = []
-            valid_pred = []
-            model.eval()
-
-            for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
-                    hyperpartisan_validation_dataloader):
-                h_batch_inputs = h_batch_inputs.to(device)
-                h_batch_targets = h_batch_targets.to(device)
-                h_batch_recover_idx = h_batch_recover_idx.to(device)
-                h_batch_num_sent = h_batch_num_sent.to(device)
-                h_batch_sent_lengths = h_batch_sent_lengths.to(device)
-
-                with torch.no_grad():
-
-                    pred = model(h_batch_inputs, (h_batch_recover_idx,
-                                                  h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
-
-                    loss = hyperpartisan_criterion(pred, h_batch_targets)
-                    accu = get_accuracy(pred, h_batch_targets)
-
-                    running_loss += loss.item()
-                    running_accu += accu.item()
-
-                    valid_targets += h_batch_targets.long().tolist()
-                    valid_pred += pred.round().long().tolist()
-
-            loss_valid = running_loss / (step + 1)
-            accu_valid = running_accu / (step + 1)
-
-            precision = metrics.precision_score(valid_targets, valid_pred, average = "binary")
-            recall = metrics.recall_score(valid_targets, valid_pred, average = "binary")
-            f1 = metrics.f1_score(valid_targets, valid_pred, average = "binary")
+            f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
+            f1_validation_scores.append(f1)
 
             print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
-                datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accu_train, accu_valid))
+                datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accuracy_train, accuracy_valid))
             print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
                 precision, recall, f1))
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.process_time() - tic) / 60))
-
-    # if config.mode in ['hyperpartisan', 'joint']:
-    #     running_loss, running_accu = 0, 0
-    #     test_targets = []
-    #     test_pred = []
-    #     model.eval()
-
-    #     for step, (h_batch_inputs, h_batch_targets, h_batch_recover_idx, h_batch_num_sent, h_batch_sent_lengths) in enumerate(
-    #             hyperpartisan_test_dataloader):
-    #         h_batch_inputs = h_batch_inputs.to(device)
-    #         h_batch_targets = h_batch_targets.to(device)
-    #         h_batch_recover_idx = h_batch_recover_idx.to(device)
-    #         h_batch_num_sent = h_batch_num_sent.to(device)
-    #         h_batch_sent_lengths = h_batch_sent_lengths.to(device)
-
-    #         with torch.no_grad():
-
-    #             pred = model(h_batch_inputs, (h_batch_recover_idx,
-    #                                           h_batch_num_sent, h_batch_sent_lengths), task='hyperpartisan')
-
-    #             loss = hyperpartisan_criterion(pred, h_batch_targets)
-    #             accu = get_accuracy(pred, h_batch_targets)
-
-    #             running_loss += loss.item()
-    #             running_accu += accu.item()
-
-    #             test_targets += h_batch_targets.long().tolist()
-    #             test_pred += pred.round().long().tolist()
-
-    #     loss_test = running_loss / (step + 1)
-    #     accu_test = running_accu / (step + 1)
-
-    #     precision = metrics.precision_score(test_targets, test_pred, average="binary")
-    #     recall = metrics.recall_score(test_targets, test_pred, average="binary")
-    #     f1 = metrics.f1_score(test_targets, test_pred, average="binary")
-
-    #     print("[{}] Performance on test set: Loss = {:.4f} Accuracy = {:.4f}".format(
-    #         datetime.now().time().replace(microsecond=0), loss_test, accu_test))
-    #     print("     (test): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
-    #         precision, recall, f1))
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -311,18 +379,16 @@ if __name__ == '__main__':
                         help='Path to the metaphor dataset')
     parser.add_argument('--hyperpartisan_dataset_folder', type=str,
                         help='Path to the hyperpartisan dataset')
-    parser.add_argument('--mode', choices=['metaphor', 'hyperpartisan', 'joint'],
+    parser.add_argument('--mode', type=TrainingMode, choices=list(TrainingMode), required=True,
                         help='The mode in which to train the model')
-    parser.add_argument('--elmo_embeddings_size', type=int, default=1024,
-                        help='Elmo embeddings size')
-    parser.add_argument('--elmo_embeddings_vectors', type=int, default=1,
-                        help='Number of Elmo embeddings vectors')
     parser.add_argument('--lowercase', action='store_true',
                         help='Lowercase the sentences before training')
     parser.add_argument('--not_tokenize', action='store_true',
                         help='Do not tokenize the sentences before training')
     parser.add_argument('--only_news', action='store_true',
                         help='Use only metaphors which have News as genre')
+    parser.add_argument('--deterministic', action='store_true',
+                        help='Make sure the training is done deterministically')
 
     config = parser.parse_args()
 
