@@ -96,7 +96,11 @@ def initialize_model(
     total_embedding_dim = elmo_vectors_size + glove_vectors_dim
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
-                             hidden_dim=argument_parser.hidden_dim, device=device).to(device)
+                             hidden_dim=argument_parser.hidden_dim,
+                             sent_encoder_dropout_rate=argument_parser.sent_encoder_dropout_rate,
+                             doc_encoder_dropout_rate=argument_parser.doc_encoder_dropout_rate,
+                             output_dropout_rate=argument_parser.output_dropout_rate,
+                             device=device).to(device)
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, joint_model.parameters()),
                            lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
@@ -110,6 +114,9 @@ def initialize_model(
     else:
         start_epoch = 1
         print('Loading model state...Done')
+
+    if "output" not in os.listdir():
+        os.mkdir("output")
 
     print("Starting training in '%s' mode from epoch %d..." %
           (argument_parser.mode, start_epoch))
@@ -414,7 +421,8 @@ def train_and_eval_hyperpartisan(
         hyperpartisan_train_dataloader: DataLoader,
         hyperpartisan_validation_dataloader: DataLoader,
         device: torch.device,
-        epoch: int):
+        epoch: int,
+        best_f1: float):
 
     joint_model.train()
 
@@ -436,6 +444,10 @@ def train_and_eval_hyperpartisan(
         device=device)
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
+
+    if f1 > best_f1:
+        best_f1 = f1
+        torch.save(joint_model.state_dict(), "output/hyperpartisan_epoch{}_f{:.4f}.pwf".format(epoch, best_f1))
 
     print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
         datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accuracy_train, accuracy_valid))
@@ -486,7 +498,8 @@ def train_and_eval_joint(
         device: torch.device,
         eval_every: int,
         joint_metaphors_first: bool,
-        epoch: int):
+        epoch: int,
+        best_f1: float):
 
     joint_model.train()
 
@@ -512,6 +525,10 @@ def train_and_eval_joint(
         device=device)
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
+
+    if f1 > best_f1:
+        best_f1 = f1
+        torch.save(joint_model.state_dict(), "joint_epoch{}_f{:.4f}.pwf".format(epoch, best_f1))
 
     print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
         datetime.now().time().replace(microsecond=0), epoch, train_loss, valid_loss, train_accuracy, valid_accuracy))
@@ -584,6 +601,8 @@ def train_model(argument_parser: ArgumentParserHelper):
 
     tic = time.process_time()
 
+    best_f1 = .0
+
     for epoch in range(start_epoch, argument_parser.max_epochs + 1):
         # Joint mode by batches
         if argument_parser.mode == TrainingMode.JointBatches:
@@ -598,7 +617,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                 device=device,
                 eval_every=argument_parser.joint_eval_every,
                 joint_metaphors_first=argument_parser.joint_metaphors_first,
-                epoch=epoch)
+                epoch=epoch,
+                best_f1=best_f1)
 
         else:
             # Joint mode by epochs or single training
@@ -622,7 +642,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                     hyperpartisan_train_dataloader=hyperpartisan_train_dataloader,
                     hyperpartisan_validation_dataloader=hyperpartisan_validation_dataloader,
                     device=device,
-                    epoch=epoch)
+                    epoch=epoch,
+                    best_f1=best_f1)
             
             if TrainingMode.contains_metaphor(argument_parser.mode) and not argument_parser.joint_metaphors_first:
                 # Complete one epoch of metaphors AFTER the hyperpartisan

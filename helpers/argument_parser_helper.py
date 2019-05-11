@@ -14,7 +14,7 @@ class ArgumentParserHelper():
         self._batch_size: int = 16
         self._hidden_dim: int = 100
         self._glove_size: int = None
-        self._weight_decay: float = 0
+        self._weight_decay: float = 0.
         self._metaphor_dataset_folder: str = None
         self._hyperpartisan_dataset_folder: str = None
         self._mode: TrainingMode = None
@@ -24,6 +24,9 @@ class ArgumentParserHelper():
         self._deterministic: bool = False
         self._joint_eval_every: int = 50
         self._joint_metaphors_first: bool = False
+        self._sent_encoder_dropout_rate: float = 0.
+        self._doc_encoder_dropout_rate: float = 0.
+        self._output_dropout_rate: float = 0.
 
     def parse_arguments(self):
 
@@ -46,7 +49,7 @@ class ArgumentParserHelper():
                             help='Hidden dimension of the recurrent network')
         parser.add_argument('--glove_size', type=int,
                             help='Number of GloVe vectors to load initially')
-        parser.add_argument('--weight_decay', type=float, default=0,
+        parser.add_argument('--weight_decay', type=float, default = 0.,
                             help='Weight decay for the optimizer')
         parser.add_argument('--metaphor_dataset_folder', type=str, required=True,
                             help='Path to the metaphor dataset')
@@ -66,6 +69,12 @@ class ArgumentParserHelper():
                             help='If joint batches mode is used, this specifies how often should be evaluation on hyperpartisan task made')
         parser.add_argument('--joint_metaphors_first', action='store_true',
                             help='If joint mode is used, this specifies whether metaphors should be batched first or not')
+        parser.add_argument('--sent_encoder_dropout_rate', type=float, default = 0.,
+                            help='Dropout rate to be used in the biLSTM sentence encoder')
+        parser.add_argument('--doc_encoder_dropout_rate', type=float, default = 0.,
+                            help='Dropout rate to be used in the biLSTM document encoder')
+        parser.add_argument('--output_dropout_rate', type=float, default = 0.,
+                            help='Dropout rate to be used in the classification layer')
 
         config = parser.parse_args()
 
@@ -91,6 +100,9 @@ class ArgumentParserHelper():
         self._deterministic = config.deterministic
         self._joint_eval_every = config.joint_eval_every
         self._joint_metaphors_first = config.joint_metaphors_first
+        self._sent_encoder_dropout_rate = config.sent_encoder_dropout_rate
+        self._doc_encoder_dropout_rate = config.doc_encoder_dropout_rate
+        self._output_dropout_rate = config.output_dropout_rate
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -186,3 +198,15 @@ class ArgumentParserHelper():
     @property
     def joint_metaphors_first(self) -> int:
         return self._joint_metaphors_first
+
+    @property
+    def sent_encoder_dropout_rate(self) -> float:
+        return self._sent_encoder_dropout_rate
+
+    @property
+    def doc_encoder_dropout_rate(self) -> float:
+        return self._doc_encoder_dropout_rate
+
+    @property
+    def output_dropout_rate(self) -> float:
+        return self._output_dropout_rate
