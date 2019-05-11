@@ -5,7 +5,7 @@ from enums.training_mode import TrainingMode
 
 class ArgumentParserHelper():
     def __init__(self):
-        self._checkpoint_path: str = None
+        self._model_checkpoint: str = None
         self._data_path: str = None
         self._vector_file_name: str = None
         self._vector_cache_dir: str = None
@@ -31,8 +31,8 @@ class ArgumentParserHelper():
     def parse_arguments(self):
 
         parser = argparse.ArgumentParser()
-        parser.add_argument('--checkpoint_path', type=str, required=True,
-                            help='Path to save/load the checkpoint data')
+        parser.add_argument('--model_checkpoint', type=str, required=True,
+                            help='Path to save/load the model')
         parser.add_argument('--data_path', type=str,
                             help='Path where data is saved')
         parser.add_argument('--vector_file_name', type=str, required=True,
@@ -81,7 +81,7 @@ class ArgumentParserHelper():
         self._load_config(config)
 
     def _load_config(self, config):
-        self._checkpoint_path = config.checkpoint_path
+        self._model_checkpoint = config.model_checkpoint
         self._data_path = config.data_path
         self._vector_file_name = config.vector_file_name
         self._vector_cache_dir = config.vector_cache_dir
@@ -120,8 +120,8 @@ class ArgumentParserHelper():
               f'joint_metaphors_first: {self._joint_metaphors_first}\n')
 
     @property
-    def checkpoint_path(self) -> str:
-        return self._checkpoint_path
+    def model_checkpoint(self) -> str:
+        return self._model_checkpoint
 
     @property
     def data_path(self) -> str:
