@@ -63,7 +63,7 @@ class ArgumentParserHelper():
         parser.add_argument('--deterministic', action='store_true',
                             help='Make sure the training is done deterministically')
         parser.add_argument('--joint_eval_every', type=int, default=50,
-                            help='If joint batches mode is used, this specifies how often should be evaluation on hyperpartisan task made')
+                            help='If joint batches mode is used, this specifies how often should evaluation be done on hyperpartisan task')
         parser.add_argument('--joint_metaphors_first', action='store_true',
                             help='If joint mode is used, this specifies whether metaphors should be batched first or not')
 
