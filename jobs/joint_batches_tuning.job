@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=02:30:00
+#SBATCH --time=20:00:00
 #SBATCH --mem=60000M
 #SBATCH --partition=gpu_shared_course
 #SBATCH --gres=gpu:1
@@ -17,13 +17,13 @@ module load cuDNN/7.0.5-CUDA-9.0.176
 module load NCCL/2.0.5-CUDA-9.0.176
 export LD_LIBRARY_PATH=/hpc/eb/Debian9/cuDNN/7.1-CUDA-8.0.44-GCCcore-5.4.0/lib64:$LD_LIBRARY_PATH
 
-for lr in 0.00001 0.0001 0.001 0.01
+for lr in 0.0001 0.001 0.01
 do
-    for wd in 0.01 0.1 0
+    for wd in 0.01 0.1
     do
-        for doc_dropout in 0.3 0.2 0.1 0
+        for doc_dropout in 0.2 0.1 0
         do
-            srun python3 -u train.py --learning_rate $lr --weight_decay $wd --doc_encoder_dropout_rate $doc_dropout --model_checkpoint 'checkpoints/jtb_tune.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --deterministic --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 20 --hidden_dim 256 --joint_eval_every 500000 --mode JointBatches >> output/joint_batches_tuning.out
+            srun python3 -u train.py --learning_rate $lr --weight_decay $wd --doc_encoder_dropout_rate $doc_dropout --model_checkpoint 'checkpoints/jtb_tune.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --deterministic --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 3 --hidden_dim 128 --joint_eval_every 33 --mode JointBatches >> output/joint_batches_tuning.out
         done
     done
 done
