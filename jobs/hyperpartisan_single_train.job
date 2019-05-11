@@ -4,12 +4,10 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=6:00:00
-#SBATCH --mem=10000M
+#SBATCH --time=01:00:00
+#SBATCH --mem=60000M
 #SBATCH --partition=gpu_shared_course
 #SBATCH --gres=gpu:1
-#SBATCH --mail-type=END
-#SBATCH --mail-user=ioannis.tsiamas@gmail.com
 
 module purge
 module load eb
@@ -19,17 +17,4 @@ module load cuDNN/7.0.5-CUDA-9.0.176
 module load NCCL/2.0.5-CUDA-9.0.176
 export LD_LIBRARY_PATH=/hpc/eb/Debian9/cuDNN/7.1-CUDA-8.0.44-GCCcore-5.4.0/lib64:$LD_LIBRARY_PATH
 
-mkdir -p $TMPDIR
-mkdir -p $TMPDIR/vector_cache
-mkdir -p $TMPDIR/VUAsequence
-
-rsync -a $HOME/hyperpartisan-news-detector/* $TMPDIR/
-rsync -a $HOME/Project/data/glove.840B.300d.txt $TMPDIR/vector_cache
-rsync -a $HOME/Project/data/VUAsequence/* $TMPDIR/VUAsequence
-rsync -a $HOME/Project/data/Hyperpartisan/* $TMPDIR/Hyperpartisan
-
-cd $TMPDIR
-
-srun python3 -u train.py --mode hyperpartisan --vector_file_name glove.840B.300d.txt --glove_size 100000 --hyperpartisan_dataset_folder Hyperpartisan --checkpoint_path saved_models/JM.pt --max_epochs 10 --vector_cache_dir vector_cache --metaphor_dataset_folder VUAsequence
-
-# rsync -arv output/BoW/* $HOME/Project/outputs/BoW
+srun python3 -u train.py --checkpoint_path 'checkpoints' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --deterministic --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 20 --mode Hyperpartisan
