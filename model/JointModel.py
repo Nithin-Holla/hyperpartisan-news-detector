@@ -12,14 +12,18 @@ class JointModel(nn.Module):
             self,
             embedding_dim,
             hidden_dim,
+            sent_encoder_dropout_rate,
+            doc_encoder_dropout_rate,
+            output_dropout_rate,
             device):
 
         super(JointModel, self).__init__()
         self.sentence_encoder = SentenceEncoder(
-            embedding_dim, hidden_dim, device)
+            embedding_dim, hidden_dim, sent_encoder_dropout_rate, device)
         self.document_encoder = DocumentEncoder(
-            2 * hidden_dim, hidden_dim, device)
-        self.hyperpartisan_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
+            2 * hidden_dim, hidden_dim, doc_encoder_dropout_rate, device)
+        self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
+                                              nn.Linear(2 * hidden_dim, 1),
                                               nn.Sigmoid())
 
         self.device = device
