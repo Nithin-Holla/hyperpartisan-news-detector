@@ -9,7 +9,6 @@ class ArgumentParserHelper():
         self._data_path: str = None
         self._vector_file_name: str = None
         self._vector_cache_dir: str = None
-        self._embedding_dimension: int = 300
         self._learning_rate: float = 2e-3
         self._max_epochs: int = 5
         self._batch_size: int = 16
@@ -23,6 +22,8 @@ class ArgumentParserHelper():
         self._tokenize: bool = True
         self._only_news: bool = False
         self._deterministic: bool = False
+        self._joint_eval_every: int = 50
+        self._joint_metaphors_first: bool = False
 
     def parse_arguments(self):
 
@@ -35,8 +36,6 @@ class ArgumentParserHelper():
                             help='File in which vectors are saved')
         parser.add_argument('--vector_cache_dir', type=str, default='.vector_cache',
                             help='Directory where vectors would be cached')
-        parser.add_argument('--embedding_dimension', type=int, default=300,
-                            help='Dimensions of the vector embeddings')
         parser.add_argument('--learning_rate', type=float, default=2e-3,
                             help='Learning rate')
         parser.add_argument('--max_epochs', type=int, default=5,
@@ -63,6 +62,10 @@ class ArgumentParserHelper():
                             help='Use only metaphors which have News as genre')
         parser.add_argument('--deterministic', action='store_true',
                             help='Make sure the training is done deterministically')
+        parser.add_argument('--joint_eval_every', type=int, default=50,
+                            help='If joint batches mode is used, this specifies how often should be evaluation on hyperpartisan task made')
+        parser.add_argument('--joint_metaphors_first', action='store_true',
+                            help='If joint mode is used, this specifies whether metaphors should be batched first or not')
 
         config = parser.parse_args()
 
@@ -73,7 +76,6 @@ class ArgumentParserHelper():
         self._data_path = config.data_path
         self._vector_file_name = config.vector_file_name
         self._vector_cache_dir = config.vector_cache_dir
-        self._embedding_dimension = config.embedding_dimension
         self._learning_rate = config.learning_rate
         self._max_epochs = config.max_epochs
         self._batch_size = config.batch_size
@@ -87,6 +89,23 @@ class ArgumentParserHelper():
         self._tokenize = not config.not_tokenize
         self._only_news = config.only_news
         self._deterministic = config.deterministic
+        self._joint_eval_every = config.joint_eval_every
+        self._joint_metaphors_first = config.joint_metaphors_first
+
+    def print_unique_arguments(self):
+        print(f'learning_rate: {self._learning_rate}\n' + 
+              f'max_epochs: {self._max_epochs}\n' + 
+              f'batch_size: {self._batch_size}\n' + 
+              f'hidden_dim: {self._hidden_dim}\n' + 
+              f'glove_size: {self._glove_size}\n' + 
+              f'weight_decay: {self._weight_decay}\n' + 
+              f'mode: {self._mode}\n' + 
+              f'lowercase: {self._lowercase}\n' + 
+              f'tokenize: {self.tokenize}\n' + 
+              f'only_news: {self._only_news}\n' + 
+              f'deterministic: {self._deterministic}\n' + 
+              f'joint_eval_every: {self._joint_eval_every}\n' + 
+              f'joint_metaphors_first: {self._joint_metaphors_first}\n')
 
     @property
     def checkpoint_path(self) -> str:
@@ -159,3 +178,11 @@ class ArgumentParserHelper():
     @property
     def deterministic(self) -> bool:
         return self._deterministic
+
+    @property
+    def joint_eval_every(self) -> int:
+        return self._joint_eval_every
+
+    @property
+    def joint_metaphors_first(self) -> int:
+        return self._joint_metaphors_first
