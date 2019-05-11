@@ -13,7 +13,7 @@ class TrainingMode(Enum):
     @staticmethod
     def contains_metaphor(training_mode) -> bool:
         result = (training_mode == TrainingMode.Metaphor or training_mode ==
-                  TrainingMode.JointEpochs)
+                  TrainingMode.JointEpochs or training_mode == TrainingMode.JointBatches)
         return result
 
     @staticmethod
