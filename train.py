@@ -345,7 +345,7 @@ def forward_full_joint_batches(
         device: torch.device,
         joint_metaphors_first: bool,
         eval_func = None,
-        eval_every: int = None,
+        eval_every: int = 50,
         train: bool = False):
 
     all_hyperpartisan_targets = []
@@ -502,13 +502,13 @@ def train_and_eval_joint(
         joint_metaphors_first=joint_metaphors_first,
         train=True)
 
-    valid_loss, valid_accuracy, valid_targets, valid_predictions = forward_full_joint_batches(
+    joint_model.eval()
+
+    valid_loss, valid_accuracy, valid_targets, valid_predictions = forward_full_hyperpartisan(
         joint_model=joint_model,
         optimizer=None,
-        metaphor_criterion=metaphor_criterion,
-        hyperpartisan_criterion=hyperpartisan_criterion,
-        dataloader=joint_validation_dataloader,
-        joint_metaphors_first=joint_metaphors_first,
+        criterion=hyperpartisan_criterion,
+        dataloader=hyperpartisan_validation_dataloader,
         device=device)
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
