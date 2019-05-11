@@ -105,8 +105,8 @@ def initialize_model(
                            lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
     # Load the checkpoint if found
-    if os.path.isfile(argument_parser.checkpoint_path):
-        checkpoint = torch.load(argument_parser.checkpoint_path)
+    if os.path.isfile(argument_parser.model_checkpoint):
+        checkpoint = torch.load(argument_parser.model_checkpoint)
         joint_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
@@ -441,7 +441,7 @@ def train_and_eval_hyperpartisan(
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] HYPERPARTISAN _> epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || "
+    print("[{}] HYPERPARTISAN -> epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || "
           "ACCURACY: train = {:.4f}, valid = {:.4f} || PRECISION: valid = {:.4f}, RECALL: valid = {:.4f} || "
           "F1 SCORE: valid = {:.4f}".format(
         datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accuracy_train, accuracy_valid,
@@ -664,7 +664,7 @@ def train_model(argument_parser: ArgumentParserHelper):
             torch.save({'model_state_dict': joint_model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
                         'epoch': epoch},
-                       argument_parser.checkpoint_path)
+                       argument_parser.model_checkpoint)
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.process_time() - tic) / 60))
