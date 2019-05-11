@@ -96,7 +96,11 @@ def initialize_model(
     total_embedding_dim = elmo_vectors_size + glove_vectors_dim
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
-                             hidden_dim=argument_parser.hidden_dim, device=device).to(device)
+                             hidden_dim=argument_parser.hidden_dim,
+                             sent_encoder_dropout_rate=argument_parser.sent_encoder_dropout_rate,
+                             doc_encoder_dropout_rate=argument_parser.doc_encoder_dropout_rate,
+                             output_dropout_rate=argument_parser.output_dropout_rate,
+                             device=device).to(device)
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, joint_model.parameters()),
                            lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
@@ -437,10 +441,13 @@ def train_and_eval_hyperpartisan(
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accuracy_train, accuracy_valid))
-    print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+    print("[{}] HYPERPARTISAN _> epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || "
+          "ACCURACY: train = {:.4f}, valid = {:.4f} || PRECISION: valid = {:.4f}, RECALL: valid = {:.4f} || "
+          "F1 SCORE: valid = {:.4f}".format(
+        datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accuracy_train, accuracy_valid,
         precision, recall, f1))
+
+    return f1
 
 
 def train_and_eval_metaphor(
@@ -469,10 +476,12 @@ def train_and_eval_metaphor(
         dataloader=metaphor_validation_dataloader,
         device=device)
 
-    current_f1_score, _, _ = calculate_metrics(val_targets, val_predictions)
+    f1, _, _ = calculate_metrics(val_targets, val_predictions)
 
-    print("[{}] epoch {} || F1: valid = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), epoch, current_f1_score))
+    print("[{}] METAPHOR -> epoch {} || F1 SCORE: valid = {:.4f}".format(
+        datetime.now().time().replace(microsecond=0), epoch, f1))
+
+    return f1
 
 
 def train_and_eval_joint(
@@ -530,6 +539,8 @@ def train_and_eval_joint(
         datetime.now().time().replace(microsecond=0), epoch, train_loss, valid_loss, train_accuracy, valid_accuracy,
         precision, recall, f1))
 
+    return f1
+
 
 def evaluate_joint_batches(
     joint_model: JointModel,
@@ -548,10 +559,9 @@ def evaluate_joint_batches(
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] || LOSS: valid = {:.4f} || ACCURACY: valid = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), loss_valid, accuracy_valid))
-    print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
-        precision, recall, f1))
+    print("[{}] HYPERPARTISAN -> LOSS: valid = {:.4f} || ACCURACY: valid = {:.4f} || "
+          "PRECISION: valid = {:.4f} || RECALL: valid = {:.4f} || F1 SCORE = {:.4f}".format(
+        datetime.now().time().replace(microsecond=0), loss_valid, accuracy_valid, precision, recall, f1))
 
     joint_model.train()
 
@@ -596,10 +606,12 @@ def train_model(argument_parser: ArgumentParserHelper):
 
     tic = time.process_time()
 
+    best_f1 = .0
+
     for epoch in range(start_epoch, argument_parser.max_epochs + 1):
         # Joint mode by batches
         if argument_parser.mode == TrainingMode.JointBatches:
-            train_and_eval_joint(
+            f1 = train_and_eval_joint(
                 joint_model=joint_model,
                 optimizer=optimizer,
                 hyperpartisan_criterion=hyperpartisan_criterion,
@@ -616,7 +628,7 @@ def train_model(argument_parser: ArgumentParserHelper):
             # Joint mode by epochs or single training
             if TrainingMode.contains_metaphor(argument_parser.mode) and argument_parser.joint_metaphors_first:
                 # Complete one epoch of metaphors BEFORE the hyperpartisan
-                train_and_eval_metaphor(
+                f1 = train_and_eval_metaphor(
                     joint_model=joint_model,
                     optimizer=optimizer,
                     metaphor_criterion=metaphor_criterion,
@@ -627,7 +639,7 @@ def train_model(argument_parser: ArgumentParserHelper):
 
             if TrainingMode.contains_hyperpartisan(argument_parser.mode):
                 # Complete one epoch of hyperpartisan
-                train_and_eval_hyperpartisan(
+                f1 = train_and_eval_hyperpartisan(
                     joint_model=joint_model,
                     optimizer=optimizer,
                     hyperpartisan_criterion=hyperpartisan_criterion,
@@ -638,7 +650,7 @@ def train_model(argument_parser: ArgumentParserHelper):
             
             if TrainingMode.contains_metaphor(argument_parser.mode) and not argument_parser.joint_metaphors_first:
                 # Complete one epoch of metaphors AFTER the hyperpartisan
-                train_and_eval_metaphor(
+                f1 = train_and_eval_metaphor(
                     joint_model=joint_model,
                     optimizer=optimizer,
                     metaphor_criterion=metaphor_criterion,
@@ -646,6 +658,13 @@ def train_model(argument_parser: ArgumentParserHelper):
                     metaphor_validation_dataloader=metaphor_validation_dataloader,
                     device=device,
                     epoch=epoch)
+
+        if f1 > best_f1:
+            best_f1 = f1
+            torch.save({'model_state_dict': joint_model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'epoch': epoch},
+                       argument_parser.checkpoint_path)
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.process_time() - tic) / 60))

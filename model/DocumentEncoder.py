@@ -5,11 +5,11 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 class DocumentEncoder(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, device):
+    def __init__(self, input_dim, hidden_dim, dropout_rate, device):
         super(DocumentEncoder, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.encoder = nn.LSTM(input_dim, hidden_dim, bidirectional=True, batch_first=True)
+        self.encoder = nn.LSTM(input_dim, hidden_dim, bidirectional=True, batch_first=True, dropout = dropout_rate)
         self.pre_attn = nn.Sequential(nn.Linear(2 * hidden_dim, 2 * hidden_dim),
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.randn((2 * hidden_dim, 1)))
