@@ -481,7 +481,7 @@ def train_and_eval_joint(
         hyperpartisan_criterion: Module,
         metaphor_criterion: Module,
         joint_train_dataloader: DataLoader,
-        joint_validation_dataloader: DataLoader,
+        metaphor_validation_dataloader: DataLoader,
         hyperpartisan_validation_dataloader: DataLoader,
         device: torch.device,
         eval_every: int,
@@ -504,6 +504,18 @@ def train_and_eval_joint(
 
     joint_model.eval()
 
+    val_targets, val_predictions = forward_full_metaphor(
+        joint_model=joint_model,
+        optimizer=None,
+        criterion=metaphor_criterion,
+        dataloader=metaphor_validation_dataloader,
+        device=device)
+
+    f1, precision, recall = calculate_metrics(val_targets, val_predictions)
+
+    print("[{}] METAPHOR -> epoch {} || F1 SCORE: valid = {:.4f}".format(
+        datetime.now().time().replace(microsecond=0), epoch, f1))
+
     valid_loss, valid_accuracy, valid_targets, valid_predictions = forward_full_hyperpartisan(
         joint_model=joint_model,
         optimizer=None,
@@ -513,9 +525,9 @@ def train_and_eval_joint(
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), epoch, train_loss, valid_loss, train_accuracy, valid_accuracy))
-    print("     (valid): precision_score = {:.4f}, recall_score = {:.4f}, f1 = {:.4f}".format(
+    print("[{}] HYPERPARTISAN -> epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, "
+          "valid = {:.4f} || PRECISION: valid = {:.4f} || RECALL: valid = {:.4f} || F1 SCORE = {:.4f}".format(
+        datetime.now().time().replace(microsecond=0), epoch, train_loss, valid_loss, train_accuracy, valid_accuracy,
         precision, recall, f1))
 
 
@@ -555,7 +567,7 @@ def train_model(argument_parser: ArgumentParserHelper):
         initialize_deterministic_mode()
 
     # Set device
-    device = torch.device("cuda:0")  # if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
     glove_vectors = load_glove_vectors(argument_parser)
@@ -593,7 +605,7 @@ def train_model(argument_parser: ArgumentParserHelper):
                 hyperpartisan_criterion=hyperpartisan_criterion,
                 metaphor_criterion=metaphor_criterion,
                 joint_train_dataloader=joint_train_dataloader,
-                joint_validation_dataloader=joint_validation_dataloader,
+                metaphor_validation_dataloader=metaphor_validation_dataloader,
                 hyperpartisan_validation_dataloader=hyperpartisan_validation_dataloader,
                 device=device,
                 eval_every=argument_parser.joint_eval_every,
