@@ -27,12 +27,15 @@ class ArgumentParserHelper():
         self._sent_encoder_dropout_rate: float = 0.
         self._doc_encoder_dropout_rate: float = 0.
         self._output_dropout_rate: float = 0.
+        self._load_model: bool = False
 
     def parse_arguments(self):
 
         parser = argparse.ArgumentParser()
         parser.add_argument('--model_checkpoint', type=str, required=True,
                             help='Path to save/load the model')
+        parser.add_argument('--load_model', action='store_true',
+                            help='Whether the program should look for a cached model and resume the state')
         parser.add_argument('--data_path', type=str,
                             help='Path where data is saved')
         parser.add_argument('--vector_file_name', type=str, required=True,
@@ -103,6 +106,7 @@ class ArgumentParserHelper():
         self._sent_encoder_dropout_rate = config.sent_encoder_dropout_rate
         self._doc_encoder_dropout_rate = config.doc_encoder_dropout_rate
         self._output_dropout_rate = config.output_dropout_rate
+        self._load_model = config.load_model
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -210,3 +214,7 @@ class ArgumentParserHelper():
     @property
     def output_dropout_rate(self) -> float:
         return self._output_dropout_rate
+
+    @property
+    def load_model(self) -> bool:
+        return self._load_model

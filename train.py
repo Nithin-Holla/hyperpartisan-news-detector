@@ -105,7 +105,7 @@ def initialize_model(
                            lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
     # Load the checkpoint if found
-    if os.path.isfile(argument_parser.model_checkpoint):
+    if argument_parser.load_model and os.path.isfile(argument_parser.model_checkpoint):
         checkpoint = torch.load(argument_parser.model_checkpoint)
         joint_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
