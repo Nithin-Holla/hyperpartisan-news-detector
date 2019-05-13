@@ -53,6 +53,7 @@ def predict(config):
         if idx + 2 == article_id:
             break
 
+    # Obtain prediction and attention weights from the model
     joint_model.eval()
     with torch.no_grad():
         pred, word_attn, sent_attn = joint_model.forward(article,
@@ -63,6 +64,7 @@ def predict(config):
     word_attn = np.around(word_attn.numpy(), decimals=4)
     sent_attn = np.around(sent_attn.numpy(), decimals=4)
 
+    # Display results
     print('Hyperpartisan score: {}'.format(pred))
     for sent_idx in range(article_num_sent):
         print('Sentence {} -> Word-level attention: {}'.format(sent_idx + 1,
