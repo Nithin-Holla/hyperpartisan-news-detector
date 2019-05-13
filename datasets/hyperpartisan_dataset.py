@@ -86,6 +86,10 @@ class HyperpartisanDataset(data.Dataset):
 
 		assert len(body_tokens_per_sentence) == len(result_embeddings)
 
+		# result_embeddings - the embeddings for each sentence for each word - [ n_sentences x n_words x embedding_dim ]
+		# is_hyperpartisan - label - BOOL
+		# body_tokens_per_sentence - lengths of each sentence - [ n_sentences ]
+		# body_sentences_amount - amount of sentences in the article - SCALAR
 		return result_embeddings, is_hyperpartisan, body_tokens_per_sentence, body_sentences_amount
 
 	def __len__(self):
