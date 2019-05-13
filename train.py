@@ -6,7 +6,6 @@ from torch.nn import Module
 from torchtext.vocab import Vectors
 
 import torchtext
-import argparse
 import os
 import numpy as np
 
@@ -64,14 +63,13 @@ def get_accuracy(prediction_scores, targets):
     return accuracy
 
 
-def load_glove_vectors(
-        argument_parser: ArgumentParserHelper):
+def load_glove_vectors(vector_file_name, vector_cache_dir, glove_size):
 
     print('Loading GloVe vectors...\r', end='')
 
-    glove_vectors = torchtext.vocab.Vectors(name=argument_parser.vector_file_name,
-                                            cache=argument_parser.vector_cache_dir,
-                                            max_vectors=argument_parser.glove_size)
+    glove_vectors = torchtext.vocab.Vectors(name=vector_file_name,
+                                            cache=vector_cache_dir,
+                                            max_vectors=glove_size)
     glove_vectors.stoi = {k: v+2 for (k, v) in glove_vectors.stoi.items()}
     glove_vectors.itos = ['<unk>', '<pad>'] + glove_vectors.itos
     glove_vectors.stoi['<unk>'] = 0
@@ -580,7 +578,7 @@ def train_model(argument_parser: ArgumentParserHelper):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = load_glove_vectors(argument_parser)
+    glove_vectors = load_glove_vectors(argument_parser.vector_file_name, argument_parser.vector_cache_dir, argument_parser.glove_size)
 
     # Define the model, the optimizer and the loss module
     joint_model, optimizer, start_epoch = initialize_model(
