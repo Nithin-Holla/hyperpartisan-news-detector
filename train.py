@@ -133,7 +133,7 @@ def create_hyperpartisan_loaders(
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=None,
         batch_size=argument_parser.batch_size,
-        shuffle=True)
+        shuffle=False)
 
     return hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader
 
@@ -154,7 +154,7 @@ def create_metaphor_loaders(
         validation_dataset=metaphor_validation_dataset,
         test_dataset=metaphor_test_dataset,
         batch_size=argument_parser.batch_size,
-        shuffle=True)
+        shuffle=False)
 
     return metaphor_train_dataloader, metaphor_validation_dataloader
 
@@ -184,7 +184,7 @@ def create_joint_loaders(
         train_dataset=joint_train_dataset,
         validation_dataset=joint_validation_dataset,
         batch_size=argument_parser.batch_size,
-        shuffle=True)
+        shuffle=False)
 
     return joint_train_dataloader, joint_validation_dataloader
 
