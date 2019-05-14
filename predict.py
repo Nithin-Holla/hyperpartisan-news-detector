@@ -13,7 +13,7 @@ from train import load_glove_vectors
 
 
 def title_attention_plot(hyperpartisan_validation_dataset, model):
-    _, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
+    _, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=None,
         batch_size=4,
@@ -91,6 +91,7 @@ def predict(config):
     device = torch.device('cpu')
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=config.hidden_dim,
+                             num_layers=config.num_layers,
                              sent_encoder_dropout_rate=0,
                              doc_encoder_dropout_rate=0,
                              output_dropout_rate=0,
@@ -113,7 +114,7 @@ def predict(config):
         glove_vectors=glove_vectors,
         lowercase_sentences=config.lowercase)
 
-    _, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
+    _, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=None,
         batch_size=1,
@@ -139,6 +140,8 @@ if __name__ == '__main__':
                         help='Lowercase the sentences before training')
     parser.add_argument('--hyperpartisan_dataset_folder', type=str,
                         help='Path to the hyperpartisan dataset')
+    parser.add_argument('--num_layers', type=int, default=1,
+                        help='The number of layers in the biLSTM sentence encoder')
     config = parser.parse_args()
 
     predict(config)
