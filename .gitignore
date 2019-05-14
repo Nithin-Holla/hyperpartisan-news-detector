@@ -11,3 +11,4 @@ checkpoints/
 
 *.hdf5
 *.zip
+/runs/

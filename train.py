@@ -30,6 +30,9 @@ from enums.training_mode import TrainingMode
 from sklearn import metrics
 from datetime import datetime
 import time
+import math
+
+from tensorboardX import SummaryWriter
 
 elmo_vectors_size = 1024
 
@@ -352,6 +355,8 @@ def forward_full_joint_batches(
         joint_metaphors_first: bool,
         loss_suppress_factor: float,
         best_f1_score: int,
+        summary_writer: SummaryWriter,
+        epoch: int,
         eval_func=None,
         eval_every: int = 50,
         train: bool = False):
@@ -361,6 +366,8 @@ def forward_full_joint_batches(
 
     running_hyperpartisan_loss = 0
     running_hyperpartisan_accuracy = 0
+
+    global_step = (epoch - 1) * math.floor(len(dataloader.dataset) / eval_every)
 
     for step, (metaphor_batch, hyperpartisan_batch) in enumerate(dataloader):
         print(
@@ -419,6 +426,18 @@ def forward_full_joint_batches(
                 cache_model(joint_model=joint_model,
                             optimizer=optimizer)
 
+            global_step += 1
+            log_metrics(
+                summary_writer,
+                global_step,
+                loss_train,
+                accuracy_train,
+                val_loss,
+                val_acc,
+                val_precision,
+                val_recall,
+                val_f1)
+
             print_hyperpartisan_stats(
                 train_loss=loss_train,
                 valid_loss=val_loss,
@@ -442,7 +461,8 @@ def train_and_eval_hyperpartisan(
         hyperpartisan_train_dataloader: DataLoader,
         hyperpartisan_validation_dataloader: DataLoader,
         device: torch.device,
-    best_f1_score: int,
+        best_f1_score: int,
+        summary_writer: SummaryWriter,
         epoch: int):
 
     joint_model.train()
@@ -462,6 +482,17 @@ def train_and_eval_hyperpartisan(
                                                                                               device=device)
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
+
+    log_metrics(
+        summary_writer,
+        epoch,
+        loss_train,
+        accuracy_train,
+        loss_valid,
+        accuracy_valid,
+        precision,
+        recall,
+        f1)
 
     print_hyperpartisan_stats(
         train_loss=loss_train,
@@ -524,7 +555,8 @@ def train_and_eval_joint(
         joint_metaphors_first: bool,
         epoch: int,
         loss_suppress_factor: float,
-        best_f1_score: int):
+        best_f1_score: int,
+        summary_writer: SummaryWriter):
 
     joint_model.train()
 
@@ -541,7 +573,9 @@ def train_and_eval_joint(
         eval_every=eval_every,
         joint_metaphors_first=joint_metaphors_first,
         train=True,
-        best_f1_score=best_f1_score)
+        best_f1_score=best_f1_score,
+        summary_writer=summary_writer,
+        epoch=epoch)
 
     joint_model.eval()
 
@@ -641,6 +675,31 @@ def cache_model(joint_model, optimizer, epoch=None):
 
     torch.save(torch_state, argument_parser.model_checkpoint)
 
+def log_metrics(
+        summary_writer: SummaryWriter,
+        global_step,
+        loss_train,
+        accuracy_train,
+        val_loss,
+        val_acc,
+        val_precision,
+        val_recall,
+        val_f1):
+
+    summary_writer.add_scalar(
+        'train_loss', loss_train, global_step=global_step)
+    summary_writer.add_scalar(
+        'train_accuracy', accuracy_train, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_loss', val_loss, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_accuracy', val_acc, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_precision', val_precision, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_recall', val_recall, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_f1', val_f1, global_step=global_step)
 
 def train_model(argument_parser: ArgumentParserHelper):
     """
@@ -663,6 +722,9 @@ def train_model(argument_parser: ArgumentParserHelper):
     joint_model, optimizer, start_epoch = initialize_model(
         argument_parser, device, glove_vectors.dim)
 
+    summary_writer = SummaryWriter(
+        f'runs/exp-{argument_parser.mode}-odr_{argument_parser.output_dropout_rate}-lr_{argument_parser.learning_rate}-wd_{argument_parser.weight_decay}-lsf_{argument_parser.loss_suppress_factor}')
+    
     metaphor_criterion = nn.BCELoss()
     hyperpartisan_criterion = nn.BCELoss()
 
@@ -678,7 +740,7 @@ def train_model(argument_parser: ArgumentParserHelper):
 
     # Load Joint batches data
     if argument_parser.mode == TrainingMode.JointBatches:
-        joint_train_dataloader, joint_validation_dataloader = create_joint_loaders(
+        joint_train_dataloader, _ = create_joint_loaders(
             argument_parser, glove_vectors)
 
     tic = time.process_time()
@@ -700,8 +762,9 @@ def train_model(argument_parser: ArgumentParserHelper):
                 eval_every=argument_parser.joint_eval_every,
                 joint_metaphors_first=argument_parser.joint_metaphors_first,
                 epoch=epoch,
-                loss_suppress_factor=argument_parser.loss_supress_factor,
-                best_f1_score=best_f1)
+                loss_suppress_factor=argument_parser.loss_suppress_factor,
+                best_f1_score=best_f1,
+                summary_writer=summary_writer)
 
         else:
             # Joint mode by epochs or single training
@@ -727,7 +790,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                     hyperpartisan_validation_dataloader=hyperpartisan_validation_dataloader,
                     device=device,
                     best_f1_score=best_f1,
-                    epoch=epoch)
+                    epoch=epoch,
+                    summary_writer=summary_writer)
 
             if TrainingMode.contains_metaphor(argument_parser.mode) and not argument_parser.joint_metaphors_first:
                 # Complete one epoch of metaphors AFTER the hyperpartisan
@@ -749,6 +813,8 @@ def train_model(argument_parser: ArgumentParserHelper):
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.process_time() - tic) / 60))
+
+    summary_writer.close()
 
 
 if __name__ == '__main__':
