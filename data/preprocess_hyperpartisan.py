@@ -2,7 +2,6 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 from nltk import sent_tokenize, word_tokenize
 import numpy as np
-import re
 
 def url_to_author(url):
 
@@ -16,7 +15,6 @@ def url_to_author(url):
 	return author
 
 def clean_text(text):
-	# text = re.sub('(?:[-\w.]|(?:%[\da-fA-F]{2}))+?.com', "website", text)
 	text = text.replace(".", ". ")
 	text = text.replace("=====", "")
 	text = text.replace("&amp;", "&")
@@ -36,7 +34,7 @@ def clean_text(text):
 
 def xml_parser(data_path, xml_file_articles, xml_file_ground_truth):
 
-	columns = ["date", "title_tokens", "body_tokens", "hyperpartisan", "author", "length_in_sent", "length_in_words"]
+	columns = ["date", "title_tokens", "body_tokens", "hyperpartisan", "author", "length_in_sent", "length_in_words", "links_percent", "quotes_percent"]
 	df = pd.DataFrame(columns = columns)
 
 	body_tags = ["p", "a", "q"]
@@ -63,6 +61,10 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth):
 				Title_tokens = word_tokenize(Title)
 
 				Body = ""
+
+				n_links = 0
+				n_quotes = 0
+				n_all = 0
 				
 			# finalize this article and append it to the parent dataframe
 			else:
@@ -81,13 +83,20 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth):
 
 				# Body_tokens = clean_websites(Body_tokens)
 
-				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, Length_in_sent, Length_in_words]], index = [Id], columns = columns)
+				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, Length_in_sent, Length_in_words, n_links/n_all, n_quotes/n_all]], index = [Id], columns = columns)
 				df = df.append(df_elem)
 			
 		# append this text to the article body	
 		elif article_elem.tag in body_tags:
 			
 			if article_event == "start":
+
+				if article_elem.tag == "a":
+					n_links += 1
+				if article_elem.tag == "q":
+					n_quotes += 1
+				n_all += 1
+
 				if article_elem.text is not None:
 					if "&#" not in article_elem.text:
 
@@ -115,17 +124,31 @@ def split_dataset(df, valid_size):
 	df = df.loc[df.index != 410, :]
 	df = df.loc[df.index != 95, :]
 
-	df_valid = pd.DataFrame()
+	# df_valid = pd.DataFrame()
 
-	for n in range(1, 20, 1):
-		df_valid = bysplit(df, df_valid, n)
-		if len(df_valid) > 127:
-			break
+	# for n in range(1, 20, 1):
+	# 	df_valid = bysplit(df, df_valid, n)
+	# 	if len(df_valid) > 127:
+	# 		break
 
-	df_train = df.loc[~df.index.isin(df_valid.index), :]
+	# df_train = df.loc[~df.index.isin(df_valid.index), :]
 
-	df_train = df_train.append(df_valid.loc[df_valid.author == "wthr", :])
-	df_valid = df_valid.loc[~(df_valid.author == "wthr"), :]
+	# df_train = df_train.append(df_valid.loc[df_valid.author == "wthr", :])
+	# df_valid = df_valid.loc[~(df_valid.author == "wthr"), :]
+
+	path = "C:\\Users\\ioann\\Google Drive\\UvA\\Statistical Methods for Natural Language Semantics\\Research Project\\"
+	with open(path + "validation_indices.txt", "r") as f:
+		valid_indices = f.read().splitlines()
+		for i in range(len(valid_indices)):
+			valid_indices[i] = int(valid_indices[i])
+
+	with open(path + "training_indices.txt", "r") as f:
+		train_indices = f.read().splitlines()
+		for i in range(len(train_indices)):
+			train_indices[i] = int(train_indices[i])
+			
+	df_valid = df.loc[valid_indices, :]
+	df_train = df.loc[train_indices, :]
 
 	print(df_train.hyperpartisan.mean(), len(df_train))
 	print(df_valid.hyperpartisan.mean(), len(df_valid))
@@ -143,8 +166,8 @@ df_train, df_valid = split_dataset(df, valid_size)
 
 print(len(set(df_train.author.tolist()).intersection(set(df_valid.author.tolist()))))
 
-df_train = df_train.sort_values("length_in_sent")
-df_valid = df_valid.sort_values("length_in_sent")
+# df_train = df_train.sort_values("length_in_sent")
+# df_valid = df_valid.sort_values("length_in_sent")
 
 df_train.to_csv(data_path + "train_byart.txt", sep = "\t")
 df_valid.to_csv(data_path + "valid_byart.txt", sep = "\t")

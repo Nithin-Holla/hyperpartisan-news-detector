@@ -130,7 +130,7 @@ def create_hyperpartisan_loaders(
         glove_vectors=glove_vectors,
         lowercase_sentences=argument_parser.lowercase)
 
-    hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = DataHelperHyperpartisan.create_dataloaders(
+    hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         train_dataset=hyperpartisan_train_dataset,
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=None,
@@ -211,6 +211,7 @@ def iterate_hyperpartisan(
         batch_recover_idx,
         batch_num_sent,
         batch_sent_lengths,
+        batch_feat,
         device: torch.device,
         train: bool = False):
 
@@ -219,12 +220,13 @@ def iterate_hyperpartisan(
     batch_recover_idx = batch_recover_idx.to(device)
     batch_num_sent = batch_num_sent.to(device)
     batch_sent_lengths = batch_sent_lengths.to(device)
+    batch_feat = batch_feat.to(device)
 
     if train:
         optimizer.zero_grad()
 
     predictions = joint_model.forward(batch_inputs, (batch_recover_idx,
-                                                     batch_num_sent, batch_sent_lengths), task=TrainingMode.Hyperpartisan)
+                                                     batch_num_sent, batch_sent_lengths, batch_feat), task=TrainingMode.Hyperpartisan)
 
     loss = criterion.forward(predictions, batch_targets)
 
@@ -251,9 +253,7 @@ def forward_full_hyperpartisan(
     running_loss = 0
     running_accuracy = 0
 
-    for step, (batch_inputs, batch_targets, batch_recover_idx, batch_num_sent, batch_sent_lengths) in enumerate(dataloader):
-        print(
-            f'Step {step+1}/{dataloader.__len__()}                  \r', end='')
+    for step, (batch_inputs, batch_targets, batch_recover_idx, batch_num_sent, batch_sent_lengths, batch_feat) in enumerate(dataloader):
 
         loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
             joint_model=joint_model,
@@ -264,6 +264,7 @@ def forward_full_hyperpartisan(
             batch_recover_idx=batch_recover_idx,
             batch_num_sent=batch_num_sent,
             batch_sent_lengths=batch_sent_lengths,
+            batch_feat=batch_feat,
             device=device,
             train=train)
 
@@ -321,8 +322,6 @@ def forward_full_metaphor(
     all_predictions = []
 
     for step, (batch_inputs, batch_targets, batch_lengths) in enumerate(dataloader):
-        print(
-            f'Step {step+1}/{dataloader.__len__()}                  \r', end='')
 
         batch_targets, batch_predictions = iterate_metaphor(
             joint_model=joint_model,
@@ -359,8 +358,6 @@ def forward_full_joint_batches(
     running_hyperpartisan_accuracy = 0
 
     for step, (metaphor_batch, hyperpartisan_batch) in enumerate(dataloader):
-        print(
-            f'Step {step+1}/{dataloader.__len__()}                  \r', end='')
 
         if joint_metaphors_first:
             _, _ = iterate_metaphor(
@@ -382,6 +379,7 @@ def forward_full_joint_batches(
             batch_recover_idx=hyperpartisan_batch[2],
             batch_num_sent=hyperpartisan_batch[3],
             batch_sent_lengths=hyperpartisan_batch[4],
+            batch_feat=hyperpartisan_batch[5],
             device=device,
             train=train)
 
