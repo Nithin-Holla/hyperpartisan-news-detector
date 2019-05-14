@@ -75,13 +75,15 @@ class DataHelperHyperpartisan():
         """
         DataLoaderBatch for the Hyperpartisan should be a list of (sequence, target, length) tuples...
         Returns a padded tensor of sequences sorted from longest to shortest, 
-        """        
+        """
         batch_size = len(DataLoaderBatch)
         batch_split = list(zip(*DataLoaderBatch))
 
         list_of_sequences, targets, list_of_lengths, num_of_sent, extra_feat = batch_split[0], batch_split[1], batch_split[2], batch_split[3], batch_split[4]
 
-        concat_lengths = np.array([length for lengths in list_of_lengths for length in lengths])        
+        # concat_lengths - concatted lengths of each sentence - [ batch_size * n_sentences ]
+        concat_lengths = np.array([length for lengths in list_of_lengths for length in lengths])
+        # concat_sequences - the embeddings for each batch for each sentence for each word - [ (batch_size * n_sentences) x n_words x embedding_dim ]
         concat_sequences = [seq for sequences in list_of_sequences for seq in sequences]
         max_length = max(concat_lengths)
 

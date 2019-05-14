@@ -28,7 +28,6 @@ class DocumentEncoder(nn.Module):
         dot_product = pre_attn @ self.context_vector
         dot_product[~mask] = float('-inf')
         attn_weights = torch.softmax(dot_product, dim=1)
-        attn_weights = attn_weights.expand_as(pad_packed_states)
-        document_embed = torch.sum(attn_weights * pad_packed_states, dim=1)
-        return document_embed
+        document_embed = torch.sum(attn_weights.expand_as(pad_packed_states) * pad_packed_states, dim=1)
+        return document_embed, attn_weights
 
