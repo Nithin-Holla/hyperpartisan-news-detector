@@ -98,6 +98,7 @@ def initialize_model(
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=argument_parser.hidden_dim,
+                             num_layers=argument_parser.num_layers,
                              sent_encoder_dropout_rate=argument_parser.sent_encoder_dropout_rate,
                              doc_encoder_dropout_rate=argument_parser.doc_encoder_dropout_rate,
                              output_dropout_rate=argument_parser.output_dropout_rate,
@@ -386,11 +387,11 @@ def forward_full_joint_batches(
                                                                                  criterion=hyperpartisan_criterion,
                                                                                  batch_inputs=hyperpartisan_batch[0],
                                                                                  batch_targets=hyperpartisan_batch[1],
-                                                                                 batch_recover_idx=hyperpartisan_batch[
-                                                                                     2],
+                                                                                 batch_recover_idx=hyperpartisan_batch[2],
                                                                                  batch_num_sent=hyperpartisan_batch[3],
-                                                                                 batch_sent_lengths=hyperpartisan_batch[
-                                                                                     4], device=device, train=train,
+                                                                                 batch_sent_lengths=hyperpartisan_batch[4],
+                                                                                 batch_feat=hyperpartisan_batch[5],
+                                                                                 device=device, train=train,
                                                                                  loss_suppress_factor=loss_suppress_factor)
 
         if not joint_metaphors_first:

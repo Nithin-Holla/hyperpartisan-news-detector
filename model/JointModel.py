@@ -13,6 +13,7 @@ class JointModel(nn.Module):
             self,
             embedding_dim,
             hidden_dim,
+            num_layers,
             sent_encoder_dropout_rate,
             doc_encoder_dropout_rate,
             output_dropout_rate,
@@ -20,7 +21,7 @@ class JointModel(nn.Module):
 
         super(JointModel, self).__init__()
         self.sentence_encoder = SentenceEncoder(
-            embedding_dim, hidden_dim, sent_encoder_dropout_rate, device)
+            embedding_dim, hidden_dim, num_layers, sent_encoder_dropout_rate, device)
         self.document_encoder = DocumentEncoder(
             2 * hidden_dim, hidden_dim, doc_encoder_dropout_rate, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
@@ -37,8 +38,8 @@ class JointModel(nn.Module):
             return_attention=False):
             
         if task == TrainingMode.Hyperpartisan:
-            recover_idx, num_sent_per_document, sent_lengths = extra_args
-            out, word_attn, sent_attn = self._forward_hyperpartisan(x, recover_idx, num_sent_per_document, sent_lengths)
+            recover_idx, num_sent_per_document, sent_lengths, doc_features = extra_args
+            out, word_attn, sent_attn = self._forward_hyperpartisan(x, recover_idx, num_sent_per_document, sent_lengths, doc_features)
         elif task == TrainingMode.Metaphor:
             assert return_attention is False, 'Attention is used only in hyperpartisan mode'
             len_x = extra_args
