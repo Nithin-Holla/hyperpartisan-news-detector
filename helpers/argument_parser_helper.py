@@ -29,6 +29,7 @@ class ArgumentParserHelper():
         self._output_dropout_rate: float = 0.
         self._load_model: bool = False
         self._loss_suppress_factor: float = 1.
+        self._num_layers: int = 1
 
     def parse_arguments(self):
 
@@ -81,6 +82,8 @@ class ArgumentParserHelper():
                             help='Dropout rate to be used in the classification layer')
         parser.add_argument('--loss_suppress_factor', type=float, default=1,
                             help='The factor by which hyperpartisan loss is multiplied by during training')
+        parser.add_argument('--num_layers', type=int, default=1,
+                            help='The number of layers in the biLSTM sentence encoder')
 
         config = parser.parse_args()
 
@@ -111,6 +114,7 @@ class ArgumentParserHelper():
         self._output_dropout_rate = config.output_dropout_rate
         self._load_model = config.load_model
         self._loss_suppress_factor = config.loss_suppress_factor
+        self._num_layers = config.num_layers
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -126,8 +130,11 @@ class ArgumentParserHelper():
               f'deterministic: {self._deterministic}\n' + 
               f'joint_eval_every: {self._joint_eval_every}\n' + 
               f'joint_metaphors_first: {self._joint_metaphors_first}\n' +
+              f'sent_encoder_dropout_rate: {self._sent_encoder_dropout_rate}\n' +
+              f'doc_encoder_dropout_rate: {self._doc_encoder_dropout_rate}\n' +
               f'output_dropout_rate: {self._output_dropout_rate}\n' +
-              f'loss_suppress_factor: {self._loss_suppress_factor}\n')
+              f'loss_suppress_factor: {self._loss_suppress_factor}\n' +
+              f'num_layers: {self._num_layers}')
 
     @property
     def model_checkpoint(self) -> str:
@@ -228,3 +235,8 @@ class ArgumentParserHelper():
     @property
     def loss_suppress_factor(self) -> float:
         return self._loss_suppress_factor
+
+    @property
+    def num_layers(self) -> int:
+        return self._num_layers
+    

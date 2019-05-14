@@ -6,13 +6,13 @@ from enums.training_mode import TrainingMode
 
 class SentenceEncoder(nn.Module):
 
-    def __init__(self, embedding_dim, hidden_dim, dropout_rate, device):
+    def __init__(self, embedding_dim, hidden_dim, num_layers, dropout_rate, device):
         super(SentenceEncoder, self).__init__()
 
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.encoder = nn.LSTM(embedding_dim, hidden_dim,
-                               num_layers=1, bidirectional=True, batch_first=True)
+                               num_layers=num_layers, bidirectional=True, batch_first=True)
 
         self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
                                       nn.Linear(2 * hidden_dim, 2 * hidden_dim),
