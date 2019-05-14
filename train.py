@@ -401,7 +401,16 @@ def forward_full_joint_batches(
         all_hyperpartisan_predictions.extend(batch_predictions)
 
         if step > 0 and step % eval_every == 0:
-            eval_func()
+            loss_train = running_hyperpartisan_loss / (step + 1)
+            accuracy_train = running_hyperpartisan_accuracy / (step + 1)
+
+            val_loss, val_acc, val_precision, val_recall, val_f1 = eval_func()
+            print("[{}] HYPERPARTISAN -> epoch _ || LOSS: train = {:.4f}, valid = {:.4f} || "
+                "ACCURACY: train = {:.4f}, valid = {:.4f} || PRECISION: valid = {:.4f}, RECALL: valid = {:.4f} || "
+                "F1 SCORE: valid = {:.4f}".format(
+                datetime.now().time().replace(microsecond=0), loss_train, val_loss, accuracy_train, val_acc,
+                val_precision, val_recall, val_f1))
+
 
     final_loss = running_hyperpartisan_loss / (step + 1)
     final_accuracy = running_hyperpartisan_accuracy / (step + 1)
@@ -557,11 +566,9 @@ def evaluate_joint_batches(
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] HYPERPARTISAN -> LOSS: valid = {:.4f} || ACCURACY: valid = {:.4f} || "
-          "PRECISION: valid = {:.4f} || RECALL: valid = {:.4f} || F1 SCORE = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), loss_valid, accuracy_valid, precision, recall, f1))
-
     joint_model.train()
+
+    return loss_valid, accuracy_valid, precision, recall, f1
 
 
 def train_model(argument_parser: ArgumentParserHelper):
