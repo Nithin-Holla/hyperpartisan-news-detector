@@ -27,7 +27,7 @@ class HyperpartisanDataset(data.Dataset):
 		self.glove_vectors = glove_vectors
 		self.lowercase_sentences = lowercase_sentences
 
-		self._labels, self._title_tokens, self._body_tokens = self._parse_csv_file(
+		self._labels, self._title_tokens, self._body_tokens, self._extra_feat = self._parse_csv_file(
 			filename)
 
 		self.article_indexes = {}
@@ -44,10 +44,12 @@ class HyperpartisanDataset(data.Dataset):
 		self._data_size = len(self._labels)
 
 	def __getitem__(self, idx):
+
 		start_index, end_index = self.article_indexes[idx]
 
 		elmo_embedding_file = h5py.File(self.elmo_filename, 'r')
 
+		extra_feat = self._extra_feat[idx]
 		title_tokens = self._title_tokens[idx]
 		body_tokens = self._body_tokens[idx]
 
@@ -86,11 +88,9 @@ class HyperpartisanDataset(data.Dataset):
 
 		assert len(body_tokens_per_sentence) == len(result_embeddings)
 
-		# result_embeddings - the embeddings for each sentence for each word - [ n_sentences x n_words x embedding_dim ]
-		# is_hyperpartisan - label - BOOL
-		# body_tokens_per_sentence - lengths of each sentence - [ n_sentences ]
-		# body_sentences_amount - amount of sentences in the article - SCALAR
-		return result_embeddings, is_hyperpartisan, body_tokens_per_sentence, body_sentences_amount
+		# print(len(result_embeddings), len(is_hyperpartisan), len(body_tokens_per_sentence), len(body_sentences_amount), len(extra_feat))
+
+		return result_embeddings, is_hyperpartisan, body_tokens_per_sentence, body_sentences_amount, extra_feat
 
 	def __len__(self):
 		return self._data_size
@@ -106,6 +106,15 @@ class HyperpartisanDataset(data.Dataset):
 		labels = []
 		title_tokens = []
 		body_tokens = []
+		ids = []
+		extra_feat = []
+
+		month_dict = {}
+		for month in range(12):
+			z = np.zeros(12)
+			z[month] = 1
+			z = list(z)
+			month_dict[month] = z
 
 		with open(filename, 'r', encoding="utf-8") as csv_file:
 			next(csv_file)
@@ -113,6 +122,31 @@ class HyperpartisanDataset(data.Dataset):
 			csv_reader = csv.reader(csv_file, delimiter='\t')
 
 			for _, row in enumerate(csv_reader):
+
+				ids.append(int(row[0]))
+				
+				date = row[1]
+				try:
+					y = int(date[:4])
+					m = int(date[5:7])
+
+					if y == 2018:
+						xtr = [0, 0, 0, 1]
+					elif y == 2017:
+						xtr = [0, 0, 1, 0]
+					elif y == 2016:
+						xtr = [0, 1, 0, 0]
+					else:
+						xtr = [0, 0, 0, 0]
+
+					xtr += month_dict[m]
+				except:
+					xtr = [0]*16
+
+				xtr.append(float(row[-2]))
+				xtr.append(float(row[-1]))
+
+				extra_feat.append(xtr)
 
 				labels.append(int(row[4] == "True"))
 				current_title_tokens = literal_eval(row[2])
@@ -123,7 +157,9 @@ class HyperpartisanDataset(data.Dataset):
 
 				body_tokens.append(current_body_tokens)
 
-		return labels, title_tokens, body_tokens
+				assert len(xtr) == 18
+
+		return labels, title_tokens, body_tokens, extra_feat
 
 	def _assert_elmo_vectors_file(self, csv_filename, title_tokens, body_tokens):
 		dirname = os.path.dirname(csv_filename)
