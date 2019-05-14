@@ -23,7 +23,7 @@ class JointModel(nn.Module):
         self.document_encoder = DocumentEncoder(
             2 * hidden_dim, hidden_dim, doc_encoder_dropout_rate, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
-                                              nn.Linear(2 * hidden_dim, 1),
+                                              nn.Linear(2 * hidden_dim + 18, 1),
                                               nn.Sigmoid())
 
         self.device = device
@@ -35,8 +35,8 @@ class JointModel(nn.Module):
             task: TrainingMode):
             
         if task == TrainingMode.Hyperpartisan:
-            recover_idx, num_sent_per_document, sent_lengths = extra_args
-            out = self._forward_hyperpartisan(x, recover_idx, num_sent_per_document, sent_lengths)
+            recover_idx, num_sent_per_document, sent_lengths, doc_features = extra_args
+            out = self._forward_hyperpartisan(x, recover_idx, num_sent_per_document, sent_lengths, doc_features)
         elif task == TrainingMode.Metaphor:
             len_x = extra_args
             out = self._forward_metaphor(x, len_x)
@@ -45,7 +45,7 @@ class JointModel(nn.Module):
 
         return out
 
-    def _forward_hyperpartisan(self, x, recover_idx, num_sent_per_document, sent_lengths):
+    def _forward_hyperpartisan(self, x, recover_idx, num_sent_per_document, sent_lengths, doc_features):
         # extra_args argument contains the recover_idx to unsort sentences
         # and a list of the number of sentences per article to batch them
         batch_size = len(num_sent_per_document)
@@ -88,6 +88,8 @@ class JointModel(nn.Module):
 
         doc_embedding = torch.index_select(
             sorted_doc_embedding, dim=0, index=recover_idx_sent)
+
+        doc_embedding = torch.cat([doc_embedding, doc_features], dim = 1)
 
         out = self.hyperpartisan_fc(doc_embedding).view(-1)
         return out
