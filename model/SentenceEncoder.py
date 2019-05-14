@@ -6,15 +6,16 @@ from enums.training_mode import TrainingMode
 
 class SentenceEncoder(nn.Module):
 
-    def __init__(self, embedding_dim, hidden_dim, dropout_rate, device):
+    def __init__(self, embedding_dim, hidden_dim, num_layers, dropout_rate, device):
         super(SentenceEncoder, self).__init__()
 
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.encoder = nn.LSTM(embedding_dim, hidden_dim,
-                               num_layers=2, bidirectional=True, batch_first=True, dropout = dropout_rate)
+                               num_layers=num_layers, bidirectional=True, batch_first=True)
 
-        self.pre_attn = nn.Sequential(nn.Linear(2 * hidden_dim, 2 * hidden_dim),
+        self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
+                                      nn.Linear(2 * hidden_dim, 2 * hidden_dim),
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.randn((2 * hidden_dim, 1)))
         self.metaphor_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
