@@ -523,7 +523,7 @@ def train_and_eval_joint(
         eval_every: int,
         joint_metaphors_first: bool,
         epoch: int,
-        loss_suppress_factor: float):
+        loss_suppress_factor: float,
         best_f1_score: int):
 
     joint_model.train()
@@ -700,7 +700,7 @@ def train_model(argument_parser: ArgumentParserHelper):
                 eval_every=argument_parser.joint_eval_every,
                 joint_metaphors_first=argument_parser.joint_metaphors_first,
                 epoch=epoch,
-                loss_suppress_factor=argument_parser.loss_supress_factor)
+                loss_suppress_factor=argument_parser.loss_supress_factor,
                 best_f1_score=best_f1)
 
         else:
