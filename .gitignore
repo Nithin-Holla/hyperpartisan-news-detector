@@ -1,6 +1,9 @@
 .idea/
 __pycache__/
 .vector_cache/
+.word_vector_cache/
+output/
+checkpoints/
 
 /.*
 /data/vua/*
@@ -8,3 +11,4 @@ __pycache__/
 
 *.hdf5
 *.zip
+/runs/

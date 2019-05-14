@@ -6,7 +6,6 @@ from torch.nn import Module
 from torchtext.vocab import Vectors
 
 import torchtext
-import argparse
 import os
 import numpy as np
 
@@ -31,6 +30,9 @@ from enums.training_mode import TrainingMode
 from sklearn import metrics
 from datetime import datetime
 import time
+import math
+
+from tensorboardX import SummaryWriter
 
 elmo_vectors_size = 1024
 
@@ -64,14 +66,13 @@ def get_accuracy(prediction_scores, targets):
     return accuracy
 
 
-def load_glove_vectors(
-        argument_parser: ArgumentParserHelper):
+def load_glove_vectors(vector_file_name, vector_cache_dir, glove_size):
 
     print('Loading GloVe vectors...\r', end='')
 
-    glove_vectors = torchtext.vocab.Vectors(name=argument_parser.vector_file_name,
-                                            cache=argument_parser.vector_cache_dir,
-                                            max_vectors=argument_parser.glove_size)
+    glove_vectors = torchtext.vocab.Vectors(name=vector_file_name,
+                                            cache=vector_cache_dir,
+                                            max_vectors=glove_size)
     glove_vectors.stoi = {k: v+2 for (k, v) in glove_vectors.stoi.items()}
     glove_vectors.itos = ['<unk>', '<pad>'] + glove_vectors.itos
     glove_vectors.stoi['<unk>'] = 0
@@ -105,14 +106,17 @@ def initialize_model(
                            lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
     # Load the checkpoint if found
+    start_epoch = 1
+
     if argument_parser.load_model and os.path.isfile(argument_parser.model_checkpoint):
         checkpoint = torch.load(argument_parser.model_checkpoint)
         joint_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_epoch = checkpoint['epoch'] + 1
+        if checkpoint['epoch']:
+            start_epoch = checkpoint['epoch'] + 1
+
         print('Found previous model state')
     else:
-        start_epoch = 1
         print('Loading model state...Done')
 
     print("Starting training in '%s' mode from epoch %d..." %
@@ -213,7 +217,8 @@ def iterate_hyperpartisan(
         batch_sent_lengths,
         batch_feat,
         device: torch.device,
-        train: bool = False):
+        train: bool = False,
+        loss_suppress_factor=1):
 
     batch_inputs = batch_inputs.to(device)
     batch_targets = batch_targets.to(device)
@@ -228,7 +233,7 @@ def iterate_hyperpartisan(
     predictions = joint_model.forward(batch_inputs, (batch_recover_idx,
                                                      batch_num_sent, batch_sent_lengths, batch_feat), task=TrainingMode.Hyperpartisan)
 
-    loss = criterion.forward(predictions, batch_targets)
+    loss = loss_suppress_factor * criterion.forward(predictions, batch_targets)
 
     if train:
         loss.backward()
@@ -347,7 +352,11 @@ def forward_full_joint_batches(
         dataloader: DataLoader,
         device: torch.device,
         joint_metaphors_first: bool,
-        eval_func = None,
+        loss_suppress_factor: float,
+        best_f1_score: int,
+        summary_writer: SummaryWriter,
+        epoch: int,
+        eval_func=None,
         eval_every: int = 50,
         train: bool = False):
 
@@ -356,6 +365,8 @@ def forward_full_joint_batches(
 
     running_hyperpartisan_loss = 0
     running_hyperpartisan_accuracy = 0
+
+    global_step = (epoch - 1) * math.floor(len(dataloader.dataset) / eval_every)
 
     for step, (metaphor_batch, hyperpartisan_batch) in enumerate(dataloader):
 
@@ -370,18 +381,17 @@ def forward_full_joint_batches(
                 device=device,
                 train=train)
 
-        loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
-            joint_model=joint_model,
-            optimizer=optimizer,
-            criterion=hyperpartisan_criterion,
-            batch_inputs=hyperpartisan_batch[0],
-            batch_targets=hyperpartisan_batch[1],
-            batch_recover_idx=hyperpartisan_batch[2],
-            batch_num_sent=hyperpartisan_batch[3],
-            batch_sent_lengths=hyperpartisan_batch[4],
-            batch_feat=hyperpartisan_batch[5],
-            device=device,
-            train=train)
+        loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(joint_model=joint_model,
+                                                                                 optimizer=optimizer,
+                                                                                 criterion=hyperpartisan_criterion,
+                                                                                 batch_inputs=hyperpartisan_batch[0],
+                                                                                 batch_targets=hyperpartisan_batch[1],
+                                                                                 batch_recover_idx=hyperpartisan_batch[
+                                                                                     2],
+                                                                                 batch_num_sent=hyperpartisan_batch[3],
+                                                                                 batch_sent_lengths=hyperpartisan_batch[
+                                                                                     4], device=device, train=train,
+                                                                                 loss_suppress_factor=loss_suppress_factor)
 
         if not joint_metaphors_first:
             _, _ = iterate_metaphor(
@@ -401,12 +411,44 @@ def forward_full_joint_batches(
         all_hyperpartisan_predictions.extend(batch_predictions)
 
         if step > 0 and step % eval_every == 0:
-            eval_func()
+            loss_train = running_hyperpartisan_loss / (step + 1)
+            accuracy_train = running_hyperpartisan_accuracy / (step + 1)
+
+            val_loss, val_acc, val_precision, val_recall, val_f1 = eval_func()
+
+            new_best = False
+            if val_f1 > best_f1_score:
+                new_best = True
+                best_f1_score = val_f1
+                cache_model(joint_model=joint_model,
+                            optimizer=optimizer)
+
+            global_step += 1
+            log_metrics(
+                summary_writer,
+                global_step,
+                loss_train,
+                accuracy_train,
+                val_loss,
+                val_acc,
+                val_precision,
+                val_recall,
+                val_f1)
+
+            print_hyperpartisan_stats(
+                train_loss=loss_train,
+                valid_loss=val_loss,
+                train_accuracy=accuracy_train,
+                valid_accuracy=val_acc,
+                valid_precision=val_precision,
+                valid_recall=val_recall,
+                valid_f1=val_f1,
+                new_best_score=new_best)
 
     final_loss = running_hyperpartisan_loss / (step + 1)
     final_accuracy = running_hyperpartisan_accuracy / (step + 1)
 
-    return final_loss, final_accuracy, all_hyperpartisan_targets, all_hyperpartisan_predictions
+    return final_loss, final_accuracy, all_hyperpartisan_targets, all_hyperpartisan_predictions, best_f1_score
 
 
 def train_and_eval_hyperpartisan(
@@ -416,34 +458,49 @@ def train_and_eval_hyperpartisan(
         hyperpartisan_train_dataloader: DataLoader,
         hyperpartisan_validation_dataloader: DataLoader,
         device: torch.device,
+        best_f1_score: int,
+        summary_writer: SummaryWriter,
         epoch: int):
 
     joint_model.train()
 
-    loss_train, accuracy_train, _, _ = forward_full_hyperpartisan(
-        joint_model=joint_model,
-        optimizer=optimizer,
-        criterion=hyperpartisan_criterion,
-        dataloader=hyperpartisan_train_dataloader,
-        device=device,
-        train=True)
+    loss_train, accuracy_train, _, _ = forward_full_hyperpartisan(joint_model=joint_model,
+                                                                  optimizer=optimizer,
+                                                                  criterion=hyperpartisan_criterion,
+                                                                  dataloader=hyperpartisan_train_dataloader,
+                                                                  device=device, train=True)
 
     joint_model.eval()
 
-    loss_valid, accuracy_valid, valid_targets, valid_predictions = forward_full_hyperpartisan(
-        joint_model=joint_model,
-        optimizer=None,
-        criterion=hyperpartisan_criterion,
-        dataloader=hyperpartisan_validation_dataloader,
-        device=device)
+    loss_valid, accuracy_valid, valid_targets, valid_predictions = forward_full_hyperpartisan(joint_model=joint_model,
+                                                                                              optimizer=None,
+                                                                                              criterion=hyperpartisan_criterion,
+                                                                                              dataloader=hyperpartisan_validation_dataloader,
+                                                                                              device=device)
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] HYPERPARTISAN -> epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || "
-          "ACCURACY: train = {:.4f}, valid = {:.4f} || PRECISION: valid = {:.4f}, RECALL: valid = {:.4f} || "
-          "F1 SCORE: valid = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), epoch, loss_train, loss_valid, accuracy_train, accuracy_valid,
-        precision, recall, f1))
+    log_metrics(
+        summary_writer,
+        epoch,
+        loss_train,
+        accuracy_train,
+        loss_valid,
+        accuracy_valid,
+        precision,
+        recall,
+        f1)
+
+    print_hyperpartisan_stats(
+        train_loss=loss_train,
+        valid_loss=loss_valid,
+        train_accuracy=accuracy_train,
+        valid_accuracy=accuracy_valid,
+        valid_precision=precision,
+        valid_recall=recall,
+        valid_f1=f1,
+        new_best_score=(best_f1_score < f1),
+        epoch=epoch)
 
     return f1
 
@@ -455,6 +512,7 @@ def train_and_eval_metaphor(
         metaphor_train_dataloader: DataLoader,
         metaphor_validation_dataloader: DataLoader,
         device: torch.device,
+        best_f1_score: int,
         epoch: int):
 
     joint_model.train()
@@ -476,8 +534,7 @@ def train_and_eval_metaphor(
 
     f1, _, _ = calculate_metrics(val_targets, val_predictions)
 
-    print("[{}] METAPHOR -> epoch {} || F1 SCORE: valid = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), epoch, f1))
+    print_metaphor_stats(f1, epoch, (best_f1_score < f1))
 
     return f1
 
@@ -493,21 +550,29 @@ def train_and_eval_joint(
         device: torch.device,
         eval_every: int,
         joint_metaphors_first: bool,
-        epoch: int):
+        epoch: int,
+        loss_suppress_factor: float,
+        best_f1_score: int,
+        summary_writer: SummaryWriter):
 
     joint_model.train()
 
-    train_loss, train_accuracy, _, _ = forward_full_joint_batches(
+    train_loss, train_accuracy, _, _, best_f1_score = forward_full_joint_batches(
         joint_model=joint_model,
         optimizer=optimizer,
         metaphor_criterion=metaphor_criterion,
         hyperpartisan_criterion=hyperpartisan_criterion,
         dataloader=joint_train_dataloader,
         device=device,
-        eval_func=lambda: evaluate_joint_batches(joint_model, hyperpartisan_criterion, hyperpartisan_validation_dataloader, device),
+        loss_suppress_factor=loss_suppress_factor,
+        eval_func=lambda: evaluate_joint_batches(
+            joint_model, hyperpartisan_criterion, hyperpartisan_validation_dataloader, device),
         eval_every=eval_every,
         joint_metaphors_first=joint_metaphors_first,
-        train=True)
+        train=True,
+        best_f1_score=best_f1_score,
+        summary_writer=summary_writer,
+        epoch=epoch)
 
     joint_model.eval()
 
@@ -520,49 +585,118 @@ def train_and_eval_joint(
 
     f1, precision, recall = calculate_metrics(val_targets, val_predictions)
 
-    print("[{}] METAPHOR -> epoch {} || F1 SCORE: valid = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), epoch, f1))
+    print_metaphor_stats(f1, epoch, False)
 
-    valid_loss, valid_accuracy, valid_targets, valid_predictions = forward_full_hyperpartisan(
-        joint_model=joint_model,
-        optimizer=None,
-        criterion=hyperpartisan_criterion,
-        dataloader=hyperpartisan_validation_dataloader,
-        device=device)
+    valid_loss, valid_accuracy, valid_targets, valid_predictions = forward_full_hyperpartisan(joint_model=joint_model,
+                                                                                              optimizer=None,
+                                                                                              criterion=hyperpartisan_criterion,
+                                                                                              dataloader=hyperpartisan_validation_dataloader,
+                                                                                              device=device)
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] HYPERPARTISAN -> epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, "
-          "valid = {:.4f} || PRECISION: valid = {:.4f} || RECALL: valid = {:.4f} || F1 SCORE = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), epoch, train_loss, valid_loss, train_accuracy, valid_accuracy,
-        precision, recall, f1))
+    if f1 > best_f1_score:
+        best_f1_score = f1
+        cache_model(
+            joint_model=joint_model,
+            optimizer=optimizer,
+            epoch=epoch)
 
-    return f1
+    print_hyperpartisan_stats(
+        train_loss=train_loss,
+        valid_loss=valid_loss,
+        train_accuracy=train_accuracy,
+        valid_accuracy=valid_accuracy,
+        valid_precision=precision,
+        valid_recall=recall,
+        valid_f1=f1,
+        epoch=epoch)
+
+    return best_f1_score
 
 
 def evaluate_joint_batches(
-    joint_model: JointModel,
-    hyperpartisan_criterion: Module,
-    hyperpartisan_validation_dataloader: DataLoader,
-    device: torch.device):
-    
+        joint_model: JointModel,
+        hyperpartisan_criterion: Module,
+        hyperpartisan_validation_dataloader: DataLoader,
+        device: torch.device):
+
     joint_model.eval()
 
-    loss_valid, accuracy_valid, valid_targets, valid_predictions = forward_full_hyperpartisan(
-        joint_model=joint_model,
-        optimizer=None,
-        criterion=hyperpartisan_criterion,
-        dataloader=hyperpartisan_validation_dataloader,
-        device=device)
+    loss_valid, accuracy_valid, valid_targets, valid_predictions = forward_full_hyperpartisan(joint_model=joint_model,
+                                                                                              optimizer=None,
+                                                                                              criterion=hyperpartisan_criterion,
+                                                                                              dataloader=hyperpartisan_validation_dataloader,
+                                                                                              device=device)
 
     f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
 
-    print("[{}] HYPERPARTISAN -> LOSS: valid = {:.4f} || ACCURACY: valid = {:.4f} || "
-          "PRECISION: valid = {:.4f} || RECALL: valid = {:.4f} || F1 SCORE = {:.4f}".format(
-        datetime.now().time().replace(microsecond=0), loss_valid, accuracy_valid, precision, recall, f1))
-
     joint_model.train()
 
+    return loss_valid, accuracy_valid, precision, recall, f1
+
+
+def print_hyperpartisan_stats(
+        train_loss,
+        valid_loss,
+        train_accuracy,
+        valid_accuracy,
+        valid_precision,
+        valid_recall,
+        valid_f1,
+        epoch=None,
+        new_best_score: bool = False):
+
+    epoch_str = str(epoch) if epoch is not None else '_'
+
+    new_best_str = '<- new best result' if new_best_score else ''
+
+    print("[{}] HYPERPARTISAN -> epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, "
+          "valid = {:.4f} || PRECISION: valid = {:.4f} || RECALL: valid = {:.4f} || F1 SCORE = {:.4f} {}".format(
+              datetime.now().time().replace(microsecond=0), epoch_str, train_loss, valid_loss, train_accuracy, valid_accuracy, valid_precision, valid_recall, valid_f1, new_best_str))
+
+
+def print_metaphor_stats(f1, epoch, new_best_score):
+    new_best_str = '<- new best result' if new_best_score else ''
+
+    print("[{}] METAPHOR -> epoch {} || F1 SCORE: valid = {:.4f} {}".format(
+        datetime.now().time().replace(microsecond=0), epoch, f1, new_best_str))
+
+
+def cache_model(joint_model, optimizer, epoch=None):
+    torch_state = {'model_state_dict': joint_model.state_dict(),
+                   'optimizer_state_dict': optimizer.state_dict()}
+
+    if epoch is not None:
+        torch_state['epoch'] = epoch
+
+    torch.save(torch_state, argument_parser.model_checkpoint)
+
+def log_metrics(
+        summary_writer: SummaryWriter,
+        global_step,
+        loss_train,
+        accuracy_train,
+        val_loss,
+        val_acc,
+        val_precision,
+        val_recall,
+        val_f1):
+
+    summary_writer.add_scalar(
+        'train_loss', loss_train, global_step=global_step)
+    summary_writer.add_scalar(
+        'train_accuracy', accuracy_train, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_loss', val_loss, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_accuracy', val_acc, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_precision', val_precision, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_recall', val_recall, global_step=global_step)
+    summary_writer.add_scalar(
+        'valid_f1', val_f1, global_step=global_step)
 
 def train_model(argument_parser: ArgumentParserHelper):
     """
@@ -578,12 +712,16 @@ def train_model(argument_parser: ArgumentParserHelper):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = load_glove_vectors(argument_parser)
+    glove_vectors = load_glove_vectors(
+        argument_parser.vector_file_name, argument_parser.vector_cache_dir, argument_parser.glove_size)
 
     # Define the model, the optimizer and the loss module
     joint_model, optimizer, start_epoch = initialize_model(
         argument_parser, device, glove_vectors.dim)
 
+    summary_writer = SummaryWriter(
+        f'runs/exp-{argument_parser.mode}-odr_{argument_parser.output_dropout_rate}-lr_{argument_parser.learning_rate}-wd_{argument_parser.weight_decay}-lsf_{argument_parser.loss_suppress_factor}')
+    
     metaphor_criterion = nn.BCELoss()
     hyperpartisan_criterion = nn.BCELoss()
 
@@ -599,7 +737,7 @@ def train_model(argument_parser: ArgumentParserHelper):
 
     # Load Joint batches data
     if argument_parser.mode == TrainingMode.JointBatches:
-        joint_train_dataloader, joint_validation_dataloader = create_joint_loaders(
+        joint_train_dataloader, _ = create_joint_loaders(
             argument_parser, glove_vectors)
 
     tic = time.process_time()
@@ -620,7 +758,10 @@ def train_model(argument_parser: ArgumentParserHelper):
                 device=device,
                 eval_every=argument_parser.joint_eval_every,
                 joint_metaphors_first=argument_parser.joint_metaphors_first,
-                epoch=epoch)
+                epoch=epoch,
+                loss_suppress_factor=argument_parser.loss_suppress_factor,
+                best_f1_score=best_f1,
+                summary_writer=summary_writer)
 
         else:
             # Joint mode by epochs or single training
@@ -633,6 +774,7 @@ def train_model(argument_parser: ArgumentParserHelper):
                     metaphor_train_dataloader=metaphor_train_dataloader,
                     metaphor_validation_dataloader=metaphor_validation_dataloader,
                     device=device,
+                    best_f1_score=best_f1,
                     epoch=epoch)
 
             if TrainingMode.contains_hyperpartisan(argument_parser.mode):
@@ -644,8 +786,10 @@ def train_model(argument_parser: ArgumentParserHelper):
                     hyperpartisan_train_dataloader=hyperpartisan_train_dataloader,
                     hyperpartisan_validation_dataloader=hyperpartisan_validation_dataloader,
                     device=device,
-                    epoch=epoch)
-            
+                    best_f1_score=best_f1,
+                    epoch=epoch,
+                    summary_writer=summary_writer)
+
             if TrainingMode.contains_metaphor(argument_parser.mode) and not argument_parser.joint_metaphors_first:
                 # Complete one epoch of metaphors AFTER the hyperpartisan
                 f1 = train_and_eval_metaphor(
@@ -655,17 +799,19 @@ def train_model(argument_parser: ArgumentParserHelper):
                     metaphor_train_dataloader=metaphor_train_dataloader,
                     metaphor_validation_dataloader=metaphor_validation_dataloader,
                     device=device,
+                    best_f1_score=best_f1,
                     epoch=epoch)
 
         if f1 > best_f1:
             best_f1 = f1
-            torch.save({'model_state_dict': joint_model.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'epoch': epoch},
-                       argument_parser.model_checkpoint)
+            cache_model(joint_model=joint_model,
+                        optimizer=optimizer,
+                        epoch=epoch)
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.process_time() - tic) / 60))
+
+    summary_writer.close()
 
 
 if __name__ == '__main__':

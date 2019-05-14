@@ -6,6 +6,7 @@ from model.SentenceEncoder import SentenceEncoder
 
 from enums.training_mode import TrainingMode
 
+
 class JointModel(nn.Module):
 
     def __init__(
@@ -32,30 +33,37 @@ class JointModel(nn.Module):
             self,
             x,
             extra_args,
-            task: TrainingMode):
+            task: TrainingMode,
+            return_attention=False):
             
         if task == TrainingMode.Hyperpartisan:
-            recover_idx, num_sent_per_document, sent_lengths, doc_features = extra_args
-            out = self._forward_hyperpartisan(x, recover_idx, num_sent_per_document, sent_lengths, doc_features)
+            recover_idx, num_sent_per_document, sent_lengths = extra_args
+            out, word_attn, sent_attn = self._forward_hyperpartisan(x, recover_idx, num_sent_per_document, sent_lengths)
         elif task == TrainingMode.Metaphor:
+            assert return_attention is False, 'Attention is used only in hyperpartisan mode'
             len_x = extra_args
             out = self._forward_metaphor(x, len_x)
         else:
             raise Exception('Invalid task argument')
 
-        return out
+        if not return_attention:
+            return out
+        else:
+            return out, word_attn, sent_attn
 
     def _forward_hyperpartisan(self, x, recover_idx, num_sent_per_document, sent_lengths, doc_features):
         # extra_args argument contains the recover_idx to unsort sentences
         # and a list of the number of sentences per article to batch them
         batch_size = len(num_sent_per_document)
 
-        sorted_sent_embeddings = self.sentence_encoder(
+        sorted_sent_embeddings, sorted_word_attn = self.sentence_encoder(
             x, sent_lengths, TrainingMode.Hyperpartisan)
 
         # unsort
         sent_embeddings_2d = torch.index_select(
             sorted_sent_embeddings, dim=0, index=recover_idx)
+
+        word_attn = torch.index_select(sorted_word_attn, dim=0, index=recover_idx).squeeze(2)
 
         sorted_idx_sent = torch.argsort(
             num_sent_per_document, descending=True)
@@ -81,7 +89,7 @@ class JointModel(nn.Module):
             sent_embeddings_3d, dim=0, index=sorted_idx_sent)
 
         # get document embeddings
-        sorted_doc_embedding = self.document_encoder(
+        sorted_doc_embedding, sorted_sent_attn = self.document_encoder(
             sorted_sent_embeddings_3d, sorted_num_sent_per_document)
 
         recover_idx_sent = torch.argsort(sorted_idx_sent, descending=False)
@@ -91,8 +99,11 @@ class JointModel(nn.Module):
 
         doc_embedding = torch.cat([doc_embedding, doc_features], dim = 1)
 
+        sent_attn = torch.index_select(sorted_sent_attn, dim=0, index=recover_idx_sent).squeeze(2)
+
         out = self.hyperpartisan_fc(doc_embedding).view(-1)
-        return out
+
+        return out, word_attn, sent_attn
 
     def _forward_metaphor(self, x, len_x):
         out = self.sentence_encoder(x, len_x, TrainingMode.Metaphor)

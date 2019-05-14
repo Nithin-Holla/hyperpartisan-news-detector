@@ -24,8 +24,8 @@ class SentenceEncoder(nn.Module):
 
     def forward(self, x, len_x, task: TrainingMode):
         if task == TrainingMode.Hyperpartisan:
-            sentence_embed = self._forward_hyperpartisan(x, len_x)
-            return sentence_embed
+            sentence_embed, sentence_attn = self._forward_hyperpartisan(x, len_x)
+            return sentence_embed, sentence_attn
         elif task == TrainingMode.Metaphor:
             prediction = self._forward_metaphor(x, len_x)
             return prediction
@@ -44,10 +44,9 @@ class SentenceEncoder(nn.Module):
         dot_product = pre_attn @ self.context_vector
         dot_product[~mask] = float('-inf')
         attn_weights = torch.softmax(dot_product, dim=1)
-        attn_weights = attn_weights.expand_as(pad_packed_states)
-        sentence_embed = torch.sum(attn_weights * pad_packed_states, dim=1)
+        sentence_embed = torch.sum(attn_weights.expand_as(pad_packed_states) * pad_packed_states, dim=1)
 
-        return sentence_embed
+        return sentence_embed, attn_weights
 
     def _forward_metaphor(self, x, len_x):
         packed_seq = pack_padded_sequence(x, len_x, batch_first=True)

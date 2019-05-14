@@ -28,6 +28,7 @@ class ArgumentParserHelper():
         self._doc_encoder_dropout_rate: float = 0.
         self._output_dropout_rate: float = 0.
         self._load_model: bool = False
+        self._loss_suppress_factor: float = 1.
 
     def parse_arguments(self):
 
@@ -78,6 +79,8 @@ class ArgumentParserHelper():
                             help='Dropout rate to be used in the biLSTM document encoder')
         parser.add_argument('--output_dropout_rate', type=float, default = 0.,
                             help='Dropout rate to be used in the classification layer')
+        parser.add_argument('--loss_suppress_factor', type=float, default=1,
+                            help='The factor by which hyperpartisan loss is multiplied by during training')
 
         config = parser.parse_args()
 
@@ -107,6 +110,7 @@ class ArgumentParserHelper():
         self._doc_encoder_dropout_rate = config.doc_encoder_dropout_rate
         self._output_dropout_rate = config.output_dropout_rate
         self._load_model = config.load_model
+        self._loss_suppress_factor = config.loss_suppress_factor
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -121,7 +125,9 @@ class ArgumentParserHelper():
               f'only_news: {self._only_news}\n' + 
               f'deterministic: {self._deterministic}\n' + 
               f'joint_eval_every: {self._joint_eval_every}\n' + 
-              f'joint_metaphors_first: {self._joint_metaphors_first}\n')
+              f'joint_metaphors_first: {self._joint_metaphors_first}\n' +
+              f'output_dropout_rate: {self._output_dropout_rate}\n' +
+              f'loss_suppress_factor: {self._loss_suppress_factor}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -218,3 +224,7 @@ class ArgumentParserHelper():
     @property
     def load_model(self) -> bool:
         return self._load_model
+
+    @property
+    def loss_suppress_factor(self) -> float:
+        return self._loss_suppress_factor
