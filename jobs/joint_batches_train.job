@@ -17,4 +17,4 @@ module load cuDNN/7.0.5-CUDA-9.0.176
 module load NCCL/2.0.5-CUDA-9.0.176 
 export LD_LIBRARY_PATH=/hpc/eb/Debian9/cuDNN/7.1-CUDA-8.0.44-GCCcore-5.4.0/lib64:$LD_LIBRARY_PATH
 
-srun python3 -u train.py --model_checkpoint 'checkpoints/jtb.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --deterministic --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 20 --mode JointBatches >> output/joint_batches.out
+srun python3 -u train.py --model_checkpoint 'checkpoints/jtb.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --deterministic --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 3 --mode JointBatches >> output/joint_batches.out
