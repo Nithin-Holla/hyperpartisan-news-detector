@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from model.DocumentEncoder import DocumentEncoder
+from model.DocumentCNNEncoder import DocumentCNNEncoder
 from model.SentenceEncoder import SentenceEncoder
 
 from enums.training_mode import TrainingMode
@@ -22,10 +23,13 @@ class JointModel(nn.Module):
         super(JointModel, self).__init__()
         self.sentence_encoder = SentenceEncoder(
             embedding_dim, hidden_dim, num_layers, sent_encoder_dropout_rate, device)
-        self.document_encoder = DocumentEncoder(
-            (2 * hidden_dim) + embedding_dim, hidden_dim, doc_encoder_dropout_rate, device)
+        # self.document_encoder = DocumentEncoder(
+        #     (2 * hidden_dim) + embedding_dim, hidden_dim, doc_encoder_dropout_rate, device)
+
+        self.document_encoder = DocumentCNNEncoder(
+            (2 * hidden_dim), hidden_dim, doc_encoder_dropout_rate, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
-                                              nn.Linear(2 * hidden_dim + 18, 1),
+                                              nn.Linear(5*hidden_dim, 1),
                                               nn.Sigmoid())
 
         self.device = device
@@ -75,8 +79,7 @@ class JointModel(nn.Module):
         max_num_sent = sorted_num_sent_per_document[0]
 
         # create new 3d tensor (already padded across dim=1)
-        sent_embeddings_3d = torch.zeros(
-            batch_size, max_num_sent.item(), sent_embeddings_2d.shape[-1]).to(self.device)
+        sent_embeddings_3d = torch.zeros(batch_size, 200, sent_embeddings_2d.shape[-1]).to(self.device)
 
         # fill the 3d tensor
         processed_sent = 0
@@ -89,18 +92,20 @@ class JointModel(nn.Module):
         sorted_sent_embeddings_3d = torch.index_select(
             sent_embeddings_3d, dim=0, index=sorted_idx_sent)
 
+        # sorted_sent_embeddings_3d = sorted_sent_embeddings_3d.view(batch_size, 1, -1)
+        sorted_sent_embeddings_3d = sorted_sent_embeddings_3d.unsqueeze(1)
+
         # get document embeddings
-        sorted_doc_embedding, sorted_sent_attn = self.document_encoder(
+        sorted_doc_embedding, sorted_sent_attn = self.document_encoder.forward(
             sorted_sent_embeddings_3d, sorted_num_sent_per_document)
 
         recover_idx_sent = torch.argsort(sorted_idx_sent, descending=False)
 
-        doc_embedding = torch.index_select(
-            sorted_doc_embedding, dim=0, index=recover_idx_sent)
+        doc_embedding = torch.index_select(sorted_doc_embedding, dim=0, index=recover_idx_sent)
 
-        doc_embedding = torch.cat([doc_embedding, doc_features], dim = 1)
+        # doc_embedding = torch.cat([doc_embedding, doc_features], dim = 1)
 
-        sent_attn = torch.index_select(sorted_sent_attn, dim=0, index=recover_idx_sent).squeeze(2)
+        sent_attn = torch.index_select(sorted_sent_attn, dim=0, index=recover_idx_sent)#.squeeze(2)
 
         out = self.hyperpartisan_fc(doc_embedding).view(-1)
 

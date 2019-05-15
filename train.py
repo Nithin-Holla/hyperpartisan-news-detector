@@ -93,7 +93,7 @@ def initialize_model(
 
     print('Loading model state...\r', end='')
 
-    total_embedding_dim = elmo_vectors_size + glove_vectors_dim
+    total_embedding_dim = elmo_vectors_size# + glove_vectors_dim
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=argument_parser.hidden_dim,

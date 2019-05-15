@@ -15,7 +15,8 @@ class SentenceEncoder(nn.Module):
                                num_layers=num_layers, bidirectional=True, batch_first=True)
 
         self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
-                                      nn.Linear((2 * hidden_dim) + embedding_dim, 2 * hidden_dim),
+                                      nn.Linear((2 * hidden_dim), 2 * hidden_dim),
+                                      nn.BatchNorm1d(200, momentum=0.7),
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.randn((2 * hidden_dim, 1)))
         self.metaphor_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
@@ -36,7 +37,7 @@ class SentenceEncoder(nn.Module):
         packed_seq = pack_padded_sequence(x, len_x, batch_first=True)
         out, _ = self.encoder(packed_seq)
         pad_packed_states, _ = pad_packed_sequence(out, batch_first=True)
-        pad_packed_states = torch.cat([pad_packed_states, x[:, :, :self.embedding_dim] ], dim=2)
+        # pad_packed_states = torch.cat([pad_packed_states, x[:, :, :self.embedding_dim] ], dim=2)
         pre_attn = self.pre_attn(pad_packed_states)
 
         # Masked attention

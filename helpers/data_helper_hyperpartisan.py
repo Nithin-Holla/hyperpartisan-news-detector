@@ -85,12 +85,14 @@ class DataHelperHyperpartisan():
         concat_lengths = np.array([length for lengths in list_of_lengths for length in lengths])
         # concat_sequences - the embeddings for each batch for each sentence for each word - [ (batch_size * n_sentences) x n_words x embedding_dim ]
         concat_sequences = [seq for sequences in list_of_sequences for seq in sequences]
-        max_length = max(concat_lengths)
+        max_length = 200 #max(concat_lengths)
 
         embedding_dimension = concat_sequences[0].shape[1]
 
         padded_sequences = np.ones((sum(num_of_sent), max_length, embedding_dimension))
         for i, l in enumerate(concat_lengths):
-            padded_sequences[i][0:l][:] = concat_sequences[i]
+            l = min(200, l)
+            padded_sequences[i][0:l][:] = concat_sequences[i][0:l]
 
+        concat_lengths = np.array([200 for lengths in list_of_lengths for length in lengths])
         return cls._sort_batch(torch.Tensor(padded_sequences), torch.Tensor(targets), torch.LongTensor(num_of_sent), torch.LongTensor(concat_lengths), torch.Tensor(extra_feat))

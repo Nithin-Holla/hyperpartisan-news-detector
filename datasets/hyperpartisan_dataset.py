@@ -92,9 +92,9 @@ class HyperpartisanDataset(data.Dataset):
 			current_tokens_amount += len(sentence_elmo_embeddings)
 
 			# elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
-			combined_embeddings = torch.cat(
-				[sentence_elmo_embeddings, sentence_glove_embeddings], dim=1)
-			result_embeddings.append(combined_embeddings)
+			# combined_embeddings = torch.cat(
+			# 	[sentence_elmo_embeddings, sentence_glove_embeddings], dim=1)
+			result_embeddings.append(sentence_elmo_embeddings)
 
 		elmo_embedding_file.close()
 
