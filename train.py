@@ -13,14 +13,12 @@ from typing import List
 
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from datasets.metaphor_dataset import MetaphorDataset
-from datasets.joint_dataset import JointDataset
 
 from helpers.hyperpartisan_loader import HyperpartisanLoader
 from helpers.metaphor_loader import MetaphorLoader
 
 from helpers.data_helper import DataHelper
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
-from helpers.data_helper_joint import DataHelperJoint
 
 from helpers.argument_parser_helper import ArgumentParserHelper
 from model.JointModel import JointModel
@@ -134,7 +132,8 @@ def create_hyperpartisan_loaders(
     hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=argument_parser.hyperpartisan_dataset_folder,
         glove_vectors=glove_vectors,
-        lowercase_sentences=argument_parser.lowercase)
+        lowercase_sentences=argument_parser.lowercase,
+        articles_max_length=argument_parser.hyperpartisan_max_length)
 
     hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         train_dataset=hyperpartisan_train_dataset,
@@ -168,6 +167,9 @@ def create_metaphor_loaders(
 def calculate_metrics(
         targets: List,
         predictions: List):
+
+    if sum(predictions) == 0:
+        return 0, 0, 0
 
     precision = metrics.precision_score(targets, predictions, average="binary")
     recall = metrics.recall_score(targets, predictions, average="binary")

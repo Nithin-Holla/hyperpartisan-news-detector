@@ -29,6 +29,7 @@ class ArgumentParserHelper():
         self._output_dropout_rate: float = 0.
         self._load_model: bool = False
         self._loss_suppress_factor: float = 1.
+        self._hyperpartisan_max_length: int = None
         self._num_layers: int = 1
 
     def parse_arguments(self):
@@ -82,6 +83,8 @@ class ArgumentParserHelper():
                             help='Dropout rate to be used in the classification layer')
         parser.add_argument('--loss_suppress_factor', type=float, default=1,
                             help='The factor by which hyperpartisan loss is multiplied by during training')
+        parser.add_argument('--hyperpartisan_max_length', type=int, default=None,
+                            help='The length after which the hyperpartisan articles will be cut off')
         parser.add_argument('--num_layers', type=int, default=1,
                             help='The number of layers in the biLSTM sentence encoder')
 
@@ -114,6 +117,7 @@ class ArgumentParserHelper():
         self._output_dropout_rate = config.output_dropout_rate
         self._load_model = config.load_model
         self._loss_suppress_factor = config.loss_suppress_factor
+        self._hyperpartisan_max_length = config.hyperpartisan_max_length
         self._num_layers = config.num_layers
 
     def print_unique_arguments(self):
@@ -134,6 +138,7 @@ class ArgumentParserHelper():
               f'doc_encoder_dropout_rate: {self._doc_encoder_dropout_rate}\n' +
               f'output_dropout_rate: {self._output_dropout_rate}\n' +
               f'loss_suppress_factor: {self._loss_suppress_factor}\n' +
+              f'hyperpartisan_max_length: {self._hyperpartisan_max_length}\n')
               f'num_layers: {self._num_layers}')
 
     @property
@@ -233,6 +238,8 @@ class ArgumentParserHelper():
         return self._loss_suppress_factor
 
     @property
+    def hyperpartisan_max_length(self) -> int:
+        return self._hyperpartisan_max_length
     def num_layers(self) -> int:
         return self._num_layers
     
