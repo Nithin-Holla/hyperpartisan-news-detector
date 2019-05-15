@@ -11,7 +11,8 @@ class ArgumentParserHelper():
         self._vector_cache_dir: str = None
         self._learning_rate: float = 2e-3
         self._max_epochs: int = 5
-        self._batch_size: int = 16
+        self._hyperpartisan_batch_size: int = 4
+        self._metaphor_batch_size: int = 32
         self._hidden_dim: int = 100
         self._glove_size: int = None
         self._weight_decay: float = 0.
@@ -22,7 +23,6 @@ class ArgumentParserHelper():
         self._tokenize: bool = True
         self._only_news: bool = False
         self._deterministic: bool = False
-        self._joint_eval_every: int = 50
         self._joint_metaphors_first: bool = False
         self._sent_encoder_dropout_rate: float = 0.
         self._doc_encoder_dropout_rate: float = 0.
@@ -48,8 +48,10 @@ class ArgumentParserHelper():
                             help='Learning rate')
         parser.add_argument('--max_epochs', type=int, default=5,
                             help='Maximum number of epochs to train the model')
-        parser.add_argument('--batch_size', type=int, default=16,
-                            help='Batch size for training the model')
+        parser.add_argument('--hyperpartisan_batch_size', type=int, default=4,
+                            help='Batch size for training on the hyperpartisan dataset')
+        parser.add_argument('--metaphor_batch_size', type=int, default=32,
+                            help='Batch size for training on the metaphor dataset')
         parser.add_argument('--hidden_dim', type=int, default=100,
                             help='Hidden dimension of the recurrent network')
         parser.add_argument('--glove_size', type=int,
@@ -70,8 +72,6 @@ class ArgumentParserHelper():
                             help='Use only metaphors which have News as genre')
         parser.add_argument('--deterministic', action='store_true',
                             help='Make sure the training is done deterministically')
-        parser.add_argument('--joint_eval_every', type=int, default=50,
-                            help='If joint batches mode is used, this specifies how often evaluation should be done on hyperpartisan task')
         parser.add_argument('--joint_metaphors_first', action='store_true',
                             help='If joint mode is used, this specifies whether metaphors should be batched first or not')
         parser.add_argument('--sent_encoder_dropout_rate', type=float, default = 0.,
@@ -96,7 +96,8 @@ class ArgumentParserHelper():
         self._vector_cache_dir = config.vector_cache_dir
         self._learning_rate = config.learning_rate
         self._max_epochs = config.max_epochs
-        self._batch_size = config.batch_size
+        self._hyperpartisan_batch_size = config.hyperpartisan_batch_size 
+        self._metaphor_batch_size = config.metaphor_batch_size
         self._hidden_dim = config.hidden_dim
         self._glove_size = config.glove_size
         self._weight_decay = config.weight_decay
@@ -107,7 +108,6 @@ class ArgumentParserHelper():
         self._tokenize = not config.not_tokenize
         self._only_news = config.only_news
         self._deterministic = config.deterministic
-        self._joint_eval_every = config.joint_eval_every
         self._joint_metaphors_first = config.joint_metaphors_first
         self._sent_encoder_dropout_rate = config.sent_encoder_dropout_rate
         self._doc_encoder_dropout_rate = config.doc_encoder_dropout_rate
@@ -119,7 +119,8 @@ class ArgumentParserHelper():
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
               f'max_epochs: {self._max_epochs}\n' + 
-              f'batch_size: {self._batch_size}\n' + 
+              f'hyper_batch_size: {self._hyperpartisan_batch_size}\n' + 
+              f'metaphor_batch_size: {self._metaphor_batch_size}\n' + 
               f'hidden_dim: {self._hidden_dim}\n' + 
               f'glove_size: {self._glove_size}\n' + 
               f'weight_decay: {self._weight_decay}\n' + 
@@ -128,7 +129,6 @@ class ArgumentParserHelper():
               f'tokenize: {self.tokenize}\n' + 
               f'only_news: {self._only_news}\n' + 
               f'deterministic: {self._deterministic}\n' + 
-              f'joint_eval_every: {self._joint_eval_every}\n' + 
               f'joint_metaphors_first: {self._joint_metaphors_first}\n' +
               f'sent_encoder_dropout_rate: {self._sent_encoder_dropout_rate}\n' +
               f'doc_encoder_dropout_rate: {self._doc_encoder_dropout_rate}\n' +
@@ -153,10 +153,6 @@ class ArgumentParserHelper():
         return self._vector_cache_dir
 
     @property
-    def embedding_dimension(self) -> int:
-        return self._embedding_dimension
-
-    @property
     def learning_rate(self) -> float:
         return self._learning_rate
 
@@ -165,8 +161,12 @@ class ArgumentParserHelper():
         return self._max_epochs
 
     @property
-    def batch_size(self) -> int:
-        return self._batch_size
+    def hyperpartisan_batch_size(self) -> int:
+        return self._hyperpartisan_batch_size
+        
+    @property
+    def metaphor_batch_size(self) -> int:
+        return self._metaphor_batch_size
 
     @property
     def hidden_dim(self) -> int:
@@ -207,10 +207,6 @@ class ArgumentParserHelper():
     @property
     def deterministic(self) -> bool:
         return self._deterministic
-
-    @property
-    def joint_eval_every(self) -> int:
-        return self._joint_eval_every
 
     @property
     def joint_metaphors_first(self) -> int:
