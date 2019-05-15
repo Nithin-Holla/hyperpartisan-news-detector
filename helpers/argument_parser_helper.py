@@ -138,8 +138,8 @@ class ArgumentParserHelper():
               f'doc_encoder_dropout_rate: {self._doc_encoder_dropout_rate}\n' +
               f'output_dropout_rate: {self._output_dropout_rate}\n' +
               f'loss_suppress_factor: {self._loss_suppress_factor}\n' +
-              f'hyperpartisan_max_length: {self._hyperpartisan_max_length}\n')
-              f'num_layers: {self._num_layers}')
+              f'hyperpartisan_max_length: {self._hyperpartisan_max_length}\n' +
+              f'num_layers: {self._num_layers}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -240,6 +240,8 @@ class ArgumentParserHelper():
     @property
     def hyperpartisan_max_length(self) -> int:
         return self._hyperpartisan_max_length
+
+    @property
     def num_layers(self) -> int:
         return self._num_layers
     

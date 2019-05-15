@@ -183,7 +183,6 @@ def iterate_hyperpartisan(
         optimizer: Optimizer,
         criterion: Module,
         hyperpartisan_data,
-        batch_feat,
         device: torch.device,
         train: bool = False,
         loss_suppress_factor=1):
@@ -193,7 +192,7 @@ def iterate_hyperpartisan(
     batch_recover_idx = hyperpartisan_data[2].to(device)
     batch_num_sent = hyperpartisan_data[3].to(device)
     batch_sent_lengths = hyperpartisan_data[4].to(device)
-    batch_feat = batch_feat.to(device)
+    batch_feat = hyperpartisan_data[5].to(device)
 
     if train:
         optimizer.zero_grad()
@@ -226,14 +225,15 @@ def forward_full_hyperpartisan(
     running_loss = 0
     running_accuracy = 0
 
+    total_length = len(dataloader)
     for step, hyperpartisan_data in enumerate(dataloader):
+        print(f'Step {step+1}/{total_length}                  \r', end='')
 
         loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
             joint_model=joint_model,
             optimizer=optimizer,
             criterion=criterion,
             hyperpartisan_data=hyperpartisan_data,
-            batch_feat=batch_feat,
             device=device,
             train=train)
 
@@ -288,7 +288,9 @@ def forward_full_metaphor(
     all_targets = []
     all_predictions = []
 
+    total_length = len(dataloader)
     for step, metaphor_data in enumerate(dataloader):
+        print(f'Step {step+1}/{total_length}                  \r', end='')
 
         batch_targets, batch_predictions = iterate_metaphor(
             joint_model=joint_model,
@@ -331,7 +333,6 @@ def forward_full_joint_batches(
     else:
         metaphor_iterator = itertools.cycle(metaphor_iterator)
 
-
     for step, (hyperpartisan_batch, metaphor_batch) in enumerate(zip(hyperpartisan_iterator, metaphor_iterator)):
         print(f'Step {step+1}/{total_length}                  \r', end='')
 
@@ -349,7 +350,6 @@ def forward_full_joint_batches(
 
         if hyperpartisan_batch != None:
             loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
-                                                                                 device=device, train=train,
                 joint_model=joint_model,
                 optimizer=optimizer,
                 criterion=hyperpartisan_criterion,
