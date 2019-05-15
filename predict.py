@@ -21,12 +21,12 @@ def title_attention_plot(hyperpartisan_validation_dataset, model):
 
     attn_summary = None
 
-    for idx, (article, article_target, article_recover_idx, article_num_sent, article_sent_lengths) in enumerate(
+    for idx, (article, article_target, article_recover_idx, article_num_sent, article_sent_lengths, extra_feat) in enumerate(
             hyperpartisan_validation_dataloader):
         model.eval()
         with torch.no_grad():
             pred, _, batch_sent_attn = model.forward(article,
-                                                     (article_recover_idx, article_num_sent, article_sent_lengths),
+                                                     (article_recover_idx, article_num_sent, article_sent_lengths, extra_feat),
                                                      task=TrainingMode.Hyperpartisan, return_attention=True)
         batch_sent_attn = np.around(batch_sent_attn.numpy(), decimals=4)
         article_num_sent = article_num_sent.numpy()
@@ -52,7 +52,7 @@ def visualize_article_attention(hyperpartisan_validation_dataloader, model, arti
     :return: None
     """
     # Load one article
-    for idx, (article, article_target, article_recover_idx, article_num_sent, article_sent_lengths) in enumerate(
+    for idx, (article, article_target, article_recover_idx, article_num_sent, article_sent_lengths, extra_feat) in enumerate(
             hyperpartisan_validation_dataloader):
         if idx + 2 == article_id:
             break
@@ -61,7 +61,7 @@ def visualize_article_attention(hyperpartisan_validation_dataloader, model, arti
     model.eval()
     with torch.no_grad():
         pred, word_attn, sent_attn = model.forward(article,
-                                                   (article_recover_idx, article_num_sent, article_sent_lengths),
+                                                   (article_recover_idx, article_num_sent, article_sent_lengths, extra_feat),
                                                    task=TrainingMode.Hyperpartisan, return_attention=True)
     pred = pred.item()
     article_sent_lengths = article_sent_lengths[article_recover_idx]
