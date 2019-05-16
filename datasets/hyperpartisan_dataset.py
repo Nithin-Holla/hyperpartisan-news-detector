@@ -22,10 +22,12 @@ class HyperpartisanDataset(data.Dataset):
 			self,
 			filename: str,
 			glove_vectors: Vectors,
-			lowercase_sentences: bool = False):
+			lowercase_sentences: bool = False,
+            articles_max_length: int = None):
 
 		self.glove_vectors = glove_vectors
 		self.lowercase_sentences = lowercase_sentences
+		self.articles_max_length = articles_max_length
 
 		self._labels, self._title_tokens, self._body_tokens, self._extra_feat = self._parse_csv_file(
 			filename)
@@ -61,7 +63,14 @@ class HyperpartisanDataset(data.Dataset):
 			[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in title_tokens])
 
 		body_glove_embeddings = []
+		current_tokens_amount = len(title_tokens)
 		for sentence_tokens in body_tokens:
+			if self.articles_max_length and current_tokens_amount >= self.articles_max_length:
+				break
+			elif self.articles_max_length and current_tokens_amount + len(sentence_tokens) > self.articles_max_length:
+				sentence_tokens = sentence_tokens[0:(self.articles_max_length - current_tokens_amount)]
+
+			current_tokens_amount += len(sentence_tokens)
 			sentence_glove_embeddings = torch.stack(
 				[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in sentence_tokens])
 			body_glove_embeddings.append(sentence_glove_embeddings)
@@ -69,9 +78,18 @@ class HyperpartisanDataset(data.Dataset):
 		glove_embeddings = [title_glove_embeddings] + body_glove_embeddings
 
 		result_embeddings = []
+		current_tokens_amount = 0
 		for index in range(start_index, end_index):
+			if self.articles_max_length and current_tokens_amount >= self.articles_max_length:
+				break
+
 			sentence_glove_embeddings = glove_embeddings[index - start_index]
 			sentence_elmo_embeddings = torch.Tensor(elmo_embedding_file[str(index)])
+			
+			if self.articles_max_length and current_tokens_amount + len(sentence_elmo_embeddings) > self.articles_max_length:
+				sentence_elmo_embeddings = sentence_elmo_embeddings[0:(self.articles_max_length - current_tokens_amount)]
+
+			current_tokens_amount += len(sentence_elmo_embeddings)
 
 			# elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
 			combined_embeddings = torch.cat(
@@ -82,11 +100,10 @@ class HyperpartisanDataset(data.Dataset):
 
 		is_hyperpartisan = self._labels[idx]
 
-		title_length = len(title_tokens)
-		body_sentences_amount = len(body_tokens) + 1
-		body_tokens_per_sentence = [title_length] + [len(sentence_tokens) for sentence_tokens in body_tokens]
+		body_sentences_amount = len(result_embeddings)
+		body_tokens_per_sentence = [len(sentence_embeddings) for sentence_embeddings in result_embeddings]
 
-		assert len(body_tokens_per_sentence) == len(result_embeddings)
+		assert len(body_tokens_per_sentence) == body_sentences_amount
 
 		# print(len(result_embeddings), len(is_hyperpartisan), len(body_tokens_per_sentence), len(body_sentences_amount), len(extra_feat))
 

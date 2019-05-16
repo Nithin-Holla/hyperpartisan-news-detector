@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
+import math
 
 class DocumentEncoder(nn.Module):
 
@@ -14,6 +15,8 @@ class DocumentEncoder(nn.Module):
                                       nn.Linear(2 * hidden_dim, 2 * hidden_dim),
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.randn((2 * hidden_dim, 1)))
+        stdv = 1. / math.sqrt(self.context_vector.size(0))
+        self.context_vector.data.normal_(mean=0, std=stdv)
         self.device = device
 
     def forward(self, x, len_x):
