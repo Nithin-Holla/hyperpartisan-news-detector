@@ -2,6 +2,8 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 from nltk import sent_tokenize, word_tokenize
 import numpy as np
+from nltk.corpus import stopwords as nltk_stopwords
+from gensim.parsing.preprocessing import STOPWORDS as gensim_stopwords
 
 def url_to_author(url):
 
@@ -13,6 +15,25 @@ def url_to_author(url):
 	else:
 		author = url.split(".")[0]
 	return author
+
+def init_stopwords():
+
+	stopwords = set(nltk_stopwords)
+	for word in gensim_stopwords:
+		stopwords.add(word)
+	for word in list(stopwords):
+		stopwords.add(word.capitalize())
+
+	punctuation = '.,:;?!"\'\'``+={}[]()#~$--@%^*'
+	for p in punctuation:
+		stopwords.add(p)
+	stopwords.add("''")
+	stopwords.add('""')
+	stopwords.add("``")
+	stopwords.add("...")
+	stopwords.add(".....")
+
+	return stopwords
 
 def clean_text(text):
 	text = text.replace(".", ". ")
@@ -32,7 +53,7 @@ def clean_text(text):
 	text = text.replace(". . .", "...")
 	return text
 
-def xml_parser(data_path, xml_file_articles, xml_file_ground_truth):
+def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopwords):
 
 	columns = ["date", "title_tokens", "body_tokens", "hyperpartisan", "author", "length_in_sent", "length_in_words", "links_percent", "quotes_percent"]
 	df = pd.DataFrame(columns = columns)
@@ -78,10 +99,9 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth):
 				Body_sent_tokens = sent_tokenize(Body)
 				Body_tokens = [word_tokenize(sent) for sent in Body_sent_tokens]
 
+
 				Length_in_sent = len(Body_sent_tokens)
 				Length_in_words = sum(len(sent) for sent in Body_sent_tokens)
-
-				# Body_tokens = clean_websites(Body_tokens)
 
 				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, Length_in_sent, Length_in_words, n_links/n_all, n_quotes/n_all]], index = [Id], columns = columns)
 				df = df.append(df_elem)
@@ -159,8 +179,9 @@ valid_size = 128
 data_path = "C:/Users/ioann/Datasets/Hyperpartisan/"
 xml_file_articles = "articles-training-byarticle-20181122.xml"
 xml_file_ground_truth = "ground-truth-training-byarticle-20181122.xml"
+remove_stopwords = True
 
-df = xml_parser(data_path, xml_file_articles, xml_file_ground_truth)
+df = xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopwords)
 
 df_train, df_valid = split_dataset(df, valid_size)
 
