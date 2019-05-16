@@ -79,21 +79,20 @@ class JointModel(nn.Module):
         max_num_sent = sorted_num_sent_per_document[0]
 
         # create new 3d tensor (already padded across dim=1)
-        sent_embeddings_3d = torch.zeros(batch_size, 200, sent_embeddings_2d.shape[-1]).to(self.device)
+        sent_embeddings_3d = torch.zeros(batch_size, sent_embeddings_2d.shape[-1], 200).to(self.device)
 
         # fill the 3d tensor
         processed_sent = 0
         for i, num_sent in enumerate(num_sent_per_document):
 
-            sent_embeddings_3d[i, :num_sent.item(
-            ), :] = sent_embeddings_2d[processed_sent: processed_sent + num_sent.item(), :]
+            sent_embeddings_3d[i, :, :num_sent.item()] = sent_embeddings_2d[processed_sent: processed_sent + num_sent.item(), :].t()
             processed_sent += num_sent.item()
 
         sorted_sent_embeddings_3d = torch.index_select(
             sent_embeddings_3d, dim=0, index=sorted_idx_sent)
 
         # sorted_sent_embeddings_3d = sorted_sent_embeddings_3d.view(batch_size, 1, -1)
-        sorted_sent_embeddings_3d = sorted_sent_embeddings_3d.unsqueeze(1)
+        # sorted_sent_embeddings_3d = sorted_sent_embeddings_3d.unsqueeze(1)
 
         # get document embeddings
         sorted_doc_embedding, sorted_sent_attn = self.document_encoder.forward(
