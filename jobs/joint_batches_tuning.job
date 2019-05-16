@@ -20,7 +20,7 @@ do
     do
         for out_dropout in 0.5 0
         do
-            srun python3 -u train.py --hyperpartisan_batch_size hyp_batch_size --metaphor_batch_size 64 --learning_rate $lr --output_dropout_rate $out_dropout --model_checkpoint 'checkpoints/jtb_tune.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 15 --hidden_dim 128 --mode JointBatches >> output/joint_batches_tuning.out
+            srun python3 -u train.py --hyperpartisan_batch_size $hyp_batch_size --metaphor_batch_size 64 --learning_rate $lr --output_dropout_rate $out_dropout --model_checkpoint 'checkpoints/jtb_tune.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 15 --hidden_dim 128 --mode JointBatches >> output/joint_batches_tuning.out
         done
     done
 done
