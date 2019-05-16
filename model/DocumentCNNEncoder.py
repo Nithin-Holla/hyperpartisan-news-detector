@@ -16,23 +16,23 @@ class DocumentCNNEncoder(nn.Module):
 
         self.conv1 = nn.Sequential(nn.Conv1d(in_channels=input_dim, out_channels=hidden_dim, kernel_size=2),
                                    nn.ReLU(),
-                                   nn.BatchNorm1d(),
+                                   nn.BatchNorm1d(num_features=hidden_dim, momentum=0.7),
                                    nn.MaxPool1d(200 - 2))
         self.conv2 = nn.Sequential(nn.Conv1d(in_channels=input_dim, out_channels=hidden_dim, kernel_size=3),
                                    nn.ReLU(),
-                                   nn.BatchNorm1d(),
+                                   nn.BatchNorm1d(num_features=hidden_dim, momentum=0.7),
                                    nn.MaxPool1d(200 - 3))
         self.conv3 = nn.Sequential(nn.Conv1d(in_channels=input_dim, out_channels=hidden_dim, kernel_size=4),
                                    nn.ReLU(),
-                                   nn.BatchNorm1d(),
+                                   nn.BatchNorm1d(num_features=hidden_dim, momentum=0.7),
                                    nn.MaxPool1d(200 - 4))
         self.conv4 = nn.Sequential(nn.Conv1d(in_channels=input_dim, out_channels=hidden_dim, kernel_size=5),
                                    nn.ReLU(),
-                                   nn.BatchNorm1d(),
+                                   nn.BatchNorm1d(num_features=hidden_dim, momentum=0.7),
                                    nn.MaxPool1d(200 - 5))
         self.conv5 = nn.Sequential(nn.Conv1d(in_channels=input_dim, out_channels=hidden_dim, kernel_size=6),
                                    nn.ReLU(),
-                                   nn.BatchNorm1d(),
+                                   nn.BatchNorm1d(num_features=hidden_dim, momentum=0.7),
                                    nn.MaxPool1d(200 - 6))
 
         self.device = device
