@@ -13,7 +13,7 @@ class SentenceEncoder(nn.Module):
 
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
-        self.encoder = nn.LSTM(embedding_dim, hidden_dim,
+        self.encoder = nn.GRU(embedding_dim, hidden_dim,
                                num_layers=num_layers, bidirectional=True, batch_first=True)
 
         # self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
