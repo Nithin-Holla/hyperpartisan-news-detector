@@ -4,6 +4,7 @@ from nltk import sent_tokenize, word_tokenize
 import numpy as np
 from nltk.corpus import stopwords as nltk_stopwords
 from gensim.parsing.preprocessing import STOPWORDS as gensim_stopwords
+import re
 
 def url_to_author(url):
 
@@ -18,7 +19,7 @@ def url_to_author(url):
 
 def init_stopwords():
 
-	stopwords = set(nltk_stopwords)
+	stopwords = set(nltk_stopwords.words('english'))
 	for word in gensim_stopwords:
 		stopwords.add(word)
 	for word in list(stopwords):
@@ -31,7 +32,6 @@ def init_stopwords():
 	stopwords.add('""')
 	stopwords.add("``")
 	stopwords.add("...")
-	stopwords.add(".....")
 
 	return stopwords
 
@@ -55,10 +55,14 @@ def clean_text(text):
 
 def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopwords):
 
-	columns = ["date", "title_tokens", "body_tokens", "hyperpartisan", "author", "length_in_sent", "length_in_words", "links_percent", "quotes_percent"]
+	columns = ["date", "title_tokens", "body_tokens", "hyperpartisan", "author", "length_in_sent", "length_in_words", 
+		"links_percent", "quotes_percent", "stopwords_percent", "full_caps_percent", "named_entities_percent"]
 	df = pd.DataFrame(columns = columns)
 
 	body_tags = ["p", "a", "q"]
+
+	stopwords = init_stopwords()
+	re_num_simple = re.compile('^-?[0-9.,]+([eE^][0-9]+)?(th)?$')
 
 	# create iterators
 	article_iter = ET.iterparse(data_path + xml_file_articles, events = ("start", "end"))
@@ -79,13 +83,24 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 					Date = np.nan
 					
 				Title = clean_text(article_elem.attrib["title"])
-				Title_tokens = word_tokenize(Title)
-
-				Body = ""
+				Title_tokens = [token for token in word_tokenize(Title) if token not in stopwords ]
+				L = len(Title_tokens)
 
 				n_links = 0
 				n_quotes = 0
 				n_all = 0
+				n_caps = 0
+				n_names = 0
+
+				Title_tokens = [re_num_simple.sub("<num>", token) for token in Title_tokens]
+				for i, token in enumerate(Title_tokens):
+					if token.isupper():
+						n_caps += 1
+					if i > 0 and token[0].isupper():
+						n_names += 1
+
+				Body = ""
+
 				
 			# finalize this article and append it to the parent dataframe
 			else:
@@ -97,13 +112,26 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 				Author = url_to_author(ground_truth_elem.attrib["url"])
 
 				Body_sent_tokens = sent_tokenize(Body)
-				Body_tokens = [word_tokenize(sent) for sent in Body_sent_tokens]
+				L += sum([len(word_tokenize(s)) for s in Body_sent_tokens])
 
+				Body_tokens = [[token for token in word_tokenize(sent) if token not in stopwords] for sent in Body_sent_tokens]
 
+				Body_tokens = [[re_num_simple.sub("<num>", token) for token in sent] for sent in Body_tokens]
+
+				for sent in Body_tokens:
+					for i, token in enumerate(sent):
+						if token.isupper():
+							n_caps += 1
+						if i > 0 and token[0].isupper():
+							n_names += 1
+
+				Title_length = len(Title_tokens)
 				Length_in_sent = len(Body_sent_tokens)
 				Length_in_words = sum(len(sent) for sent in Body_sent_tokens)
 
-				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, Length_in_sent, Length_in_words, n_links/n_all, n_quotes/n_all]], index = [Id], columns = columns)
+				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, Length_in_sent, Length_in_words,
+										n_links/n_all, n_quotes/n_all, L/(Title_length + Length_in_words), n_caps/(Title_length + Length_in_words),
+										n_names/(Title_length + Length_in_words)]], index = [Id], columns = columns)
 				df = df.append(df_elem)
 			
 		# append this text to the article body	
@@ -190,5 +218,5 @@ print(len(set(df_train.author.tolist()).intersection(set(df_valid.author.tolist(
 # df_train = df_train.sort_values("length_in_sent")
 # df_valid = df_valid.sort_values("length_in_sent")
 
-df_train.to_csv(data_path + "train_byart.txt", sep = "\t")
-df_valid.to_csv(data_path + "valid_byart.txt", sep = "\t")
+df_train.to_csv(data_path + "train_byart_reduced.txt", sep = "\t")
+df_valid.to_csv(data_path + "valid_byart_reduced.txt", sep = "\t")

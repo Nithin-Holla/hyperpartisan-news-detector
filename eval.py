@@ -35,7 +35,7 @@ def initialize_model(argument_parser, device, glove_vectors_dim = 300, elmo_vect
 							 output_dropout_rate=.0,
 							 device=device).to(device)
 
-	checkpoint = torch.load(argument_parser.model_checkpoint)
+	checkpoint = torch.load(argument_parser.model_checkpoint, map_location = "cpu")
 	joint_model.load_state_dict(checkpoint['model_state_dict'])
 
 	return joint_model
@@ -149,9 +149,9 @@ if __name__ == '__main__':
 						help='Lowercase the sentences before training')
 	parser.add_argument('--not_tokenize', action='store_true', default = False,
 						help='Do not tokenize the sentences before training')
-	parser.add_argument('--txt_file', type = str, default = "train_byart2.txt",
+	parser.add_argument('--txt_file', type = str, default = "",
 						help='text file name containing the processed xml file')
-	parser.add_argument('--hdf5_file', type = str, default = "train_byart_emlo2.hdf5",
+	parser.add_argument('--hdf5_file', type = str, default = "",
 						help='hdf5 file name that contains the elmo embeddings')
 	parser.add_argument('--elmo_vector', type = str, choices = ["top", "average"], default = "average",
 						help='method for final emlo embeddings used')
