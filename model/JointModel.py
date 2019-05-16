@@ -23,7 +23,7 @@ class JointModel(nn.Module):
         self.sentence_encoder = SentenceEncoder(
             embedding_dim, hidden_dim, num_layers, sent_encoder_dropout_rate, device)
         self.document_encoder = DocumentEncoder(
-            (2 * hidden_dim) + embedding_dim, hidden_dim, doc_encoder_dropout_rate, device)
+            (2 * hidden_dim) + embedding_dim + 1, hidden_dim, doc_encoder_dropout_rate, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
                                               nn.Linear(2 * hidden_dim + 18, 1),
                                               nn.Sigmoid())
