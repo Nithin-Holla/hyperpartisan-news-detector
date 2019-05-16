@@ -23,7 +23,7 @@ class JointModel(nn.Module):
         self.sentence_encoder = SentenceEncoder(
             embedding_dim, hidden_dim, num_layers, sent_encoder_dropout_rate, device)
         self.document_encoder = DocumentEncoder(
-            (2 * hidden_dim) + embedding_dim + 1, hidden_dim, doc_encoder_dropout_rate, device)
+            (2 * hidden_dim) + 1, hidden_dim, doc_encoder_dropout_rate, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
                                               nn.Linear(2 * hidden_dim + 18, 1),
                                               nn.Sigmoid())
@@ -64,7 +64,7 @@ class JointModel(nn.Module):
         sent_embeddings_2d = torch.index_select(
             sorted_sent_embeddings, dim=0, index=recover_idx)
 
-        word_attn = torch.index_select(sorted_word_attn, dim=0, index=recover_idx).squeeze(2)
+        word_attn = torch.index_select(sorted_word_attn, dim=0, index=recover_idx)#.squeeze(2)
 
         sorted_idx_sent = torch.argsort(
             num_sent_per_document, descending=True)
@@ -102,7 +102,7 @@ class JointModel(nn.Module):
 
         doc_embedding = torch.cat([doc_embedding, doc_features], dim = 1)
 
-        sent_attn = torch.index_select(sorted_sent_attn, dim=0, index=recover_idx_sent).squeeze(2)
+        sent_attn = torch.index_select(sorted_sent_attn, dim=0, index=recover_idx_sent)#.squeeze(2)
 
         out = self.hyperpartisan_fc(doc_embedding).view(-1)
 
