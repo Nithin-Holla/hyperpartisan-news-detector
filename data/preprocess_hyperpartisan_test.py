@@ -4,6 +4,23 @@ from nltk import sent_tokenize, word_tokenize
 import numpy as np
 import argparse
 
+def emlo_txtfile(txtfile, title_tokens, body_tokens):
+
+	sentences_filename = txtfile.split(".")[0] + "_elmo.txt"
+	print("Writing {} file".format(sentences_filename))
+
+	with open(sentences_filename, 'w', encoding='utf-8') as sentences_file:
+		for index, article_tokens in enumerate(body_tokens):
+			article_title_tokens = title_tokens[index]
+			title_text = ' '.join(article_title_tokens)
+
+			sentences_file.write(f'{title_text}\n')
+
+			for sentence_tokens in article_tokens:
+				sentence_text = ' '.join(sentence_tokens)
+
+				sentences_file.write(f'{sentence_text}\n')
+
 def xml_parser(argument_parser):
 
 	def clean_text(text):
@@ -88,7 +105,7 @@ def xml_parser(argument_parser):
 
 	df.index = df.index.astype(int)
 						
-	df.to_csv(argument_parser.txt_file, sep = "\t")
+	return df 
 
 if __name__ == '__main__':
 
@@ -103,5 +120,10 @@ if __name__ == '__main__':
 	argument_parser = parser.parse_args()
 
 	print("Parsing xml file data...")
-	xml_parser(argument_parser)
+	df = xml_parser(argument_parser)
+	df.to_csv(argument_parser.txt_file, sep = "\t")
 	print("Parsing xml file data... Done")
+
+	print("Creating elmo text file...")
+	emlo_txtfile(argument_parser.txt_file, df.title_tokens.tolist(), df.body_tokens.tolist())
+	print("Creating elmo text file... Done")
