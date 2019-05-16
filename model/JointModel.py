@@ -23,7 +23,7 @@ class JointModel(nn.Module):
         self.sentence_encoder = SentenceEncoder(
             embedding_dim, hidden_dim, num_layers, sent_encoder_dropout_rate, device)
         self.document_encoder = DocumentEncoder(
-            (2 * hidden_dim) + embedding_dim + 1, hidden_dim, doc_encoder_dropout_rate, device)
+            (2 * hidden_dim) + embedding_dim, hidden_dim, doc_encoder_dropout_rate, device)
         self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
                                               nn.Linear(2 * hidden_dim + 18, 1),
                                               nn.Sigmoid())
@@ -76,17 +76,15 @@ class JointModel(nn.Module):
 
         # create new 3d tensor (already padded across dim=1)
         sent_embeddings_3d = torch.zeros(
-            batch_size, max_num_sent.item(), sent_embeddings_2d.shape[-1] + 1).to(self.device)
+            batch_size, max_num_sent.item(), sent_embeddings_2d.shape[-1]).to(self.device)
 
         # fill the 3d tensor
         processed_sent = 0
         for i, num_sent in enumerate(num_sent_per_document):
 
             sent_embeddings_3d[i, :num_sent.item(
-            ), :-1] = sent_embeddings_2d[processed_sent: processed_sent + num_sent.item(), :]
+            ), :] = sent_embeddings_2d[processed_sent: processed_sent + num_sent.item(), :]
             processed_sent += num_sent.item()
-
-        sent_embeddings_3d[:, 0, -1] = torch.ones(batch_size)
 
         sorted_sent_embeddings_3d = torch.index_select(
             sent_embeddings_3d, dim=0, index=sorted_idx_sent)
