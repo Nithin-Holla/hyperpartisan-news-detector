@@ -613,6 +613,22 @@ def log_metrics(
     summary_writer.add_scalar(
         'valid_f1', valid_f1, global_step=global_step)
 
+def save_best_result(arg_parser: ArgumentParserHelper, best_f1: float):
+    titles = ['time', 'f1']
+    values = [str(datetime.now().time().replace(microsecond=0)), str(best_f1)]
+    for key, value in arg_parser.__dict__.items():
+        titles.append(str(key))
+        values.append(str(value))
+
+    results_filepath = 'results.csv'
+    with open(results_filepath, mode='a') as results_file:
+        if os.stat(results_filepath).st_size == 0:
+            results_file.write(', '.join(titles))
+            results_file.write('\n')
+
+        results_file.write(', '.join(values))
+        results_file.write('\n')
+
 def train_model(argument_parser: ArgumentParserHelper):
     """
     Train the multi-task classifier model
@@ -720,6 +736,8 @@ def train_model(argument_parser: ArgumentParserHelper):
 
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.process_time() - tic) / 60))
+
+    save_best_result(argument_parser, best_f1)
 
     summary_writer.close()
 
