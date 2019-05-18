@@ -36,11 +36,14 @@ from tensorboardX import SummaryWriter
 elmo_vectors_size = 1024
 
 
-def initialize_deterministic_mode():
-    print('Initializing deterministic mode')
+def initialize_deterministic_mode(deterministic_seed):
+    if not deterministic_seed:
+        return
 
-    torch.manual_seed(42)
-    torch.cuda.manual_seed(42)
+    print(f'Initializing deterministic mode with seed {deterministic_seed}')
+
+    torch.manual_seed(deterministic_seed)
+    torch.cuda.manual_seed(deterministic_seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
@@ -637,7 +640,7 @@ def train_model(argument_parser: ArgumentParserHelper):
     """
     # Flags for deterministic runs
     if argument_parser.deterministic:
-        initialize_deterministic_mode()
+        initialize_deterministic_mode(argument_parser.deterministic)
 
     # Set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
