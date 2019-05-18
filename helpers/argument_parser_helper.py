@@ -22,7 +22,7 @@ class ArgumentParserHelper():
         self._lowercase: bool = False
         self._tokenize: bool = True
         self._only_news: bool = False
-        self._deterministic: bool = False
+        self._deterministic: int = False
         self._joint_metaphors_first: bool = False
         self._sent_encoder_dropout_rate: float = 0.
         self._doc_encoder_dropout_rate: float = 0.
@@ -71,8 +71,8 @@ class ArgumentParserHelper():
                             help='Do not tokenize the sentences before training')
         parser.add_argument('--only_news', action='store_true',
                             help='Use only metaphors which have News as genre')
-        parser.add_argument('--deterministic', action='store_true',
-                            help='Make sure the training is done deterministically')
+        parser.add_argument('--deterministic', type=int,
+                            help='The seed to be used when running deterministically. If nothing is passed, the program run will be stochastic')
         parser.add_argument('--joint_metaphors_first', action='store_true',
                             help='If joint mode is used, this specifies whether metaphors should be batched first or not')
         parser.add_argument('--sent_encoder_dropout_rate', type=float, default = 0.,
@@ -210,7 +210,7 @@ class ArgumentParserHelper():
         return self._only_news
 
     @property
-    def deterministic(self) -> bool:
+    def deterministic(self) -> int:
         return self._deterministic
 
     @property
