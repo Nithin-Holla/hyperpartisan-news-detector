@@ -14,3 +14,4 @@ checkpoints/
 /runs/
 
 *.log
+/results/
