@@ -1,37 +1,9 @@
 import argparse
 
 from enums.training_mode import TrainingMode
-
+from constants import Constants
 
 class ArgumentParserHelper():
-    def __init__(self):
-        self._model_checkpoint: str = None
-        self._data_path: str = None
-        self._vector_file_name: str = None
-        self._vector_cache_dir: str = None
-        self._learning_rate: float = 2e-3
-        self._max_epochs: int = 5
-        self._hyperpartisan_batch_size: int = 4
-        self._metaphor_batch_size: int = 32
-        self._hidden_dim: int = 100
-        self._glove_size: int = None
-        self._weight_decay: float = 0.
-        self._metaphor_dataset_folder: str = None
-        self._hyperpartisan_dataset_folder: str = None
-        self._mode: TrainingMode = None
-        self._lowercase: bool = False
-        self._tokenize: bool = True
-        self._only_news: bool = False
-        self._deterministic: int = False
-        self._joint_metaphors_first: bool = False
-        self._sent_encoder_dropout_rate: float = 0.
-        self._doc_encoder_dropout_rate: float = 0.
-        self._output_dropout_rate: float = 0.
-        self._load_model: bool = False
-        self._loss_suppress_factor: float = 1.
-        self._hyperpartisan_max_length: int = None
-        self._num_layers: int = 1
-
     def parse_arguments(self):
 
         parser = argparse.ArgumentParser()
@@ -43,21 +15,21 @@ class ArgumentParserHelper():
                             help='Path where data is saved')
         parser.add_argument('--vector_file_name', type=str, required=True,
                             help='File in which vectors are saved')
-        parser.add_argument('--vector_cache_dir', type=str, default='.vector_cache',
+        parser.add_argument('--vector_cache_dir', type=str, default=Constants.DEFAULT_VECTOR_CACHE_DIR,
                             help='Directory where vectors would be cached')
-        parser.add_argument('--learning_rate', type=float, default=2e-3,
+        parser.add_argument('--learning_rate', type=float, default=Constants.DEFAULT_LEARNING_RATE,
                             help='Learning rate')
-        parser.add_argument('--max_epochs', type=int, default=5,
+        parser.add_argument('--max_epochs', type=int, default=Constants.DEFAULT_MAX_EPOCHS,
                             help='Maximum number of epochs to train the model')
-        parser.add_argument('--hyperpartisan_batch_size', type=int, default=4,
+        parser.add_argument('--hyperpartisan_batch_size', type=int, default=Constants.DEFAULT_HYPERPARTISAN_BATCH_SIZE,
                             help='Batch size for training on the hyperpartisan dataset')
-        parser.add_argument('--metaphor_batch_size', type=int, default=32,
+        parser.add_argument('--metaphor_batch_size', type=int, default=Constants.DEFAULT_METAPHOR_BATCH_SIZE,
                             help='Batch size for training on the metaphor dataset')
-        parser.add_argument('--hidden_dim', type=int, default=100,
+        parser.add_argument('--hidden_dim', type=int, default=Constants.DEFAULT_HIDDEN_DIMENSION,
                             help='Hidden dimension of the recurrent network')
         parser.add_argument('--glove_size', type=int,
                             help='Number of GloVe vectors to load initially')
-        parser.add_argument('--weight_decay', type=float, default = 0.,
+        parser.add_argument('--weight_decay', type=float, default = Constants.DEFAULT_WEIGHT_DECAY,
                             help='Weight decay for the optimizer')
         parser.add_argument('--metaphor_dataset_folder', type=str, required=True,
                             help='Path to the metaphor dataset')
@@ -75,17 +47,17 @@ class ArgumentParserHelper():
                             help='The seed to be used when running deterministically. If nothing is passed, the program run will be stochastic')
         parser.add_argument('--joint_metaphors_first', action='store_true',
                             help='If joint mode is used, this specifies whether metaphors should be batched first or not')
-        parser.add_argument('--sent_encoder_dropout_rate', type=float, default = 0.,
+        parser.add_argument('--sent_encoder_dropout_rate', type=float, default=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
                             help='Dropout rate to be used in the biLSTM sentence encoder')
-        parser.add_argument('--doc_encoder_dropout_rate', type=float, default = 0.,
+        parser.add_argument('--doc_encoder_dropout_rate', type=float, default=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                             help='Dropout rate to be used in the biLSTM document encoder')
-        parser.add_argument('--output_dropout_rate', type=float, default = 0.,
+        parser.add_argument('--output_dropout_rate', type=float, default=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
                             help='Dropout rate to be used in the classification layer')
-        parser.add_argument('--loss_suppress_factor', type=float, default=1,
+        parser.add_argument('--loss_suppress_factor', type=float, default=Constants.DEFAULT_LOSS_SUPPRESS_FACTOR,
                             help='The factor by which hyperpartisan loss is multiplied by during training')
-        parser.add_argument('--hyperpartisan_max_length', type=int, default=None,
+        parser.add_argument('--hyperpartisan_max_length', type=int, default=Constants.DEFAULT_HYPERPARTISAN_MAX_LENGTH,
                             help='The length after which the hyperpartisan articles will be cut off')
-        parser.add_argument('--num_layers', type=int, default=1,
+        parser.add_argument('--num_layers', type=int, default=Constants.DEFAULT_NUM_LAYERS,
                             help='The number of layers in the biLSTM sentence encoder')
 
         config = parser.parse_args()
@@ -93,32 +65,32 @@ class ArgumentParserHelper():
         self._load_config(config)
 
     def _load_config(self, config):
-        self._model_checkpoint = config.model_checkpoint
-        self._data_path = config.data_path
-        self._vector_file_name = config.vector_file_name
-        self._vector_cache_dir = config.vector_cache_dir
-        self._learning_rate = config.learning_rate
-        self._max_epochs = config.max_epochs
-        self._hyperpartisan_batch_size = config.hyperpartisan_batch_size 
-        self._metaphor_batch_size = config.metaphor_batch_size
-        self._hidden_dim = config.hidden_dim
-        self._glove_size = config.glove_size
-        self._weight_decay = config.weight_decay
-        self._metaphor_dataset_folder = config.metaphor_dataset_folder
-        self._hyperpartisan_dataset_folder = config.hyperpartisan_dataset_folder
-        self._mode = config.mode
-        self._lowercase = config.lowercase
-        self._tokenize = not config.not_tokenize
-        self._only_news = config.only_news
-        self._deterministic = config.deterministic
-        self._joint_metaphors_first = config.joint_metaphors_first
-        self._sent_encoder_dropout_rate = config.sent_encoder_dropout_rate
-        self._doc_encoder_dropout_rate = config.doc_encoder_dropout_rate
-        self._output_dropout_rate = config.output_dropout_rate
-        self._load_model = config.load_model
-        self._loss_suppress_factor = config.loss_suppress_factor
-        self._hyperpartisan_max_length = config.hyperpartisan_max_length
-        self._num_layers = config.num_layers
+        self._model_checkpoint: str = config.model_checkpoint
+        self._data_path: str = config.data_path
+        self._vector_file_name: str = config.vector_file_name
+        self._vector_cache_dir: str = config.vector_cache_dir
+        self._learning_rate: float = config.learning_rate
+        self._max_epochs: int = config.max_epochs
+        self._hyperpartisan_batch_size: int = config.hyperpartisan_batch_size 
+        self._metaphor_batch_size: int = config.metaphor_batch_size
+        self._hidden_dim: int = config.hidden_dim
+        self._glove_size: int = config.glove_size
+        self._weight_decay: float = config.weight_decay
+        self._metaphor_dataset_folder: str = config.metaphor_dataset_folder
+        self._hyperpartisan_dataset_folder: str = config.hyperpartisan_dataset_folder
+        self._mode: TrainingMode = config.mode
+        self._lowercase: bool = config.lowercase
+        self._tokenize: bool = not config.not_tokenize
+        self._only_news: bool = config.only_news
+        self._deterministic: int = config.deterministic
+        self._joint_metaphors_first: bool = config.joint_metaphors_first
+        self._sent_encoder_dropout_rate: float = config.sent_encoder_dropout_rate
+        self._doc_encoder_dropout_rate: float = config.doc_encoder_dropout_rate
+        self._output_dropout_rate: float = config.output_dropout_rate
+        self._load_model: bool = config.load_model
+        self._loss_suppress_factor: float = config.loss_suppress_factor
+        self._hyperpartisan_max_length: int = config.hyperpartisan_max_length
+        self._num_layers: int = config.num_layers
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
