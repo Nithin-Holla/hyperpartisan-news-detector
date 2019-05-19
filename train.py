@@ -327,31 +327,38 @@ def forward_full_joint_batches(
     running_hyperpartisan_loss = 0
     running_hyperpartisan_accuracy = 0
 
-    total_length = max(len(hyperpartisan_dataloader), len(metaphor_dataloader))
-
-    hyperpartisan_iterator = hyperpartisan_dataloader
-    metaphor_iterator = metaphor_dataloader
-    if len(hyperpartisan_dataloader) < len(metaphor_dataloader):
-        hyperpartisan_iterator = itertools.cycle(hyperpartisan_iterator)
-    else:
+    hyperpartisan_iterator = iter(hyperpartisan_dataloader)
+    metaphor_iterator = iter(metaphor_dataloader)
+    if len(metaphor_dataloader) < len(hyperpartisan_dataloader):
         metaphor_iterator = itertools.cycle(metaphor_iterator)
 
-    for step, (hyperpartisan_batch, metaphor_batch) in enumerate(zip(hyperpartisan_iterator, metaphor_iterator)):
-        print(f'Step {step+1}/{total_length}                  \r', end='')
+    metaphor_sample_prob = 0.75
+    metaphor_steps = 0
+    hyperpartisan_steps = 0
 
-        assert hyperpartisan_batch != None
-        assert metaphor_batch != None
+    while True:
+        print(f'Step {hyperpartisan_steps+1}                  \r', end='')
 
-        if joint_metaphors_first and metaphor_batch != None:
-            _, _ = iterate_metaphor(
-                joint_model=joint_model,
-                optimizer=optimizer,
-                criterion=metaphor_criterion,
-                metaphor_data=metaphor_batch,
-                device=device,
-                train=train)
+        task = 'metaphor' if np.random.random() < metaphor_sample_prob else 'hyperpartisan'
 
-        if hyperpartisan_batch != None:
+        if task == 'metaphor':
+            try:
+                metaphor_batch = next(metaphor_iterator)
+                print('Sampled met')
+                _, _ = iterate_metaphor(
+                    joint_model=joint_model,
+                    optimizer=optimizer,
+                    criterion=metaphor_criterion,
+                    metaphor_data=metaphor_batch,
+                    device=device,
+                    train=train)
+                metaphor_steps += 1
+            except StopIteration:
+                task = 'hyperpartisan'
+
+        if task == 'hyperpartisan':
+            hyperpartisan_batch = next(hyperpartisan_iterator)
+            print('sampled hyp')
             loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
                 joint_model=joint_model,
                 optimizer=optimizer,
@@ -360,24 +367,19 @@ def forward_full_joint_batches(
                 device=device,
                 train=train,
                 loss_suppress_factor=loss_suppress_factor)
+            hyperpartisan_steps += 1
 
             running_hyperpartisan_loss += loss
             running_hyperpartisan_accuracy += accuracy
-            
+
             all_hyperpartisan_targets.extend(batch_targets)
             all_hyperpartisan_predictions.extend(batch_predictions)
 
-        if not joint_metaphors_first and metaphor_batch != None:
-            _, _ = iterate_metaphor(
-                joint_model=joint_model,
-                optimizer=optimizer,
-                criterion=metaphor_criterion,
-                metaphor_data=metaphor_batch,
-                device=device,
-                train=train)
+        if hyperpartisan_steps == len(hyperpartisan_iterator):
+            break
 
-    final_loss = running_hyperpartisan_loss / (step + 1)
-    final_accuracy = running_hyperpartisan_accuracy / (step + 1)
+    final_loss = running_hyperpartisan_loss / (hyperpartisan_steps + 1)
+    final_accuracy = running_hyperpartisan_accuracy / (hyperpartisan_steps + 1)
 
     return final_loss, final_accuracy, all_hyperpartisan_targets, all_hyperpartisan_predictions
 

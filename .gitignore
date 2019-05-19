@@ -15,3 +15,5 @@ checkpoints/
 
 *.log
 /results/
+
+results.csv
