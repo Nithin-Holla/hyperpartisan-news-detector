@@ -329,8 +329,7 @@ def forward_full_joint_batches(
 
     hyperpartisan_iterator = iter(hyperpartisan_dataloader)
     metaphor_iterator = iter(metaphor_dataloader)
-    if len(metaphor_dataloader) < len(hyperpartisan_dataloader):
-        metaphor_iterator = itertools.cycle(metaphor_iterator)
+    metaphor_iterator = itertools.cycle(metaphor_iterator)
 
     metaphor_sample_prob = 0.75
     metaphor_steps = 0
@@ -342,19 +341,16 @@ def forward_full_joint_batches(
         task = 'metaphor' if np.random.random() < metaphor_sample_prob else 'hyperpartisan'
 
         if task == 'metaphor':
-            try:
-                metaphor_batch = next(metaphor_iterator)
-                print('Sampled met')
-                _, _ = iterate_metaphor(
-                    joint_model=joint_model,
-                    optimizer=optimizer,
-                    criterion=metaphor_criterion,
-                    metaphor_data=metaphor_batch,
-                    device=device,
-                    train=train)
-                metaphor_steps += 1
-            except StopIteration:
-                task = 'hyperpartisan'
+            metaphor_batch = next(metaphor_iterator)
+            print('Sampled met')
+            _, _ = iterate_metaphor(
+                joint_model=joint_model,
+                optimizer=optimizer,
+                criterion=metaphor_criterion,
+                metaphor_data=metaphor_batch,
+                device=device,
+                train=train)
+            metaphor_steps += 1
 
         if task == 'hyperpartisan':
             hyperpartisan_batch = next(hyperpartisan_iterator)
