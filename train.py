@@ -342,7 +342,6 @@ def forward_full_joint_batches(
 
         if task == 'metaphor':
             metaphor_batch = next(metaphor_iterator)
-            print('Sampled met')
             _, _ = iterate_metaphor(
                 joint_model=joint_model,
                 optimizer=optimizer,
@@ -354,7 +353,6 @@ def forward_full_joint_batches(
 
         if task == 'hyperpartisan':
             hyperpartisan_batch = next(hyperpartisan_iterator)
-            print('sampled hyp')
             loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
                 joint_model=joint_model,
                 optimizer=optimizer,
