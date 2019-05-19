@@ -22,7 +22,7 @@ do
         do
             for current_run_seed in 3 7 42 100 114
             do
-                srun python3 -u train.py --hyperpartisan_batch_size $hyp_batch_size --metaphor_batch_size 64 --learning_rate $lr --output_dropout_rate $out_dropout --deterministic $current_run_seed --model_checkpoint 'checkpoints/hyperpartisan_best_'$current_run_seed'.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 15 --hidden_dim 128 --mode Hyperpatisan >> 'output/hyperpartisan_best'$current_run_seed'.out'
+                srun python3 -u train.py --hyperpartisan_batch_size $hyp_batch_size --metaphor_batch_size 64 --learning_rate $lr --output_dropout_rate $out_dropout --deterministic $current_run_seed --model_checkpoint 'checkpoints/hyperpartisan_best_'$current_run_seed'.pt' --vector_file_name 'glove.840B.300d.txt' --vector_cache_dir '.word_vectors_cache' --metaphor_dataset_folder 'data/vua-sequence' --hyperpartisan_dataset_folder 'Hyperpartisan' --max_epochs 15 --hidden_dim 128 --mode Hyperpartisan >> 'output/hyperpartisan_best'$current_run_seed'.out'
             done
         done
     done
