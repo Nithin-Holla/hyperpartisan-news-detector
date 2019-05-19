@@ -5,11 +5,7 @@ from torch.optim import Optimizer
 from torch.nn import Module
 from torchtext.vocab import Vectors
 
-import torchtext
 import os
-import numpy as np
-
-from typing import List
 
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from datasets.metaphor_dataset import MetaphorDataset
@@ -21,73 +17,19 @@ from helpers.data_helper import DataHelper
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 
 from helpers.argument_parser_helper import ArgumentParserHelper
+from helpers.utils_helper import UtilsHelper
 from model.JointModel import JointModel
 
 from enums.training_mode import TrainingMode
 
-from sklearn import metrics
 from datetime import datetime
 import time
-import math
 import itertools
 
+from constants import Constants
 from tensorboardX import SummaryWriter
 
-elmo_vectors_size = 1024
-
-
-def initialize_deterministic_mode(deterministic_seed):
-    if not deterministic_seed:
-        return
-
-    print(f'Initializing deterministic mode with seed {deterministic_seed}')
-
-    torch.manual_seed(deterministic_seed)
-    torch.cuda.manual_seed(deterministic_seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-
-def get_accuracy(prediction_scores, targets):
-    """
-    Calculate the accuracy
-    :param prediction_scores: Scores obtained by the model
-    :param targets: Ground truth targets
-    :return: Accuracy
-    """
-    binary = len(prediction_scores.shape) == 1
-
-    if binary:
-        prediction = prediction_scores > 0.5
-        accuracy = torch.sum(prediction == targets.byte()
-                             ).float() / prediction.shape[0]
-    else:
-        prediction = torch.argmax(prediction_scores, dim=1)
-        accuracy = torch.mean((prediction == targets).float())
-
-    return accuracy
-
-
-def load_glove_vectors(vector_file_name, vector_cache_dir, glove_size):
-
-    print('Loading GloVe vectors...\r', end='')
-
-    glove_vectors = torchtext.vocab.Vectors(name=vector_file_name,
-                                            cache=vector_cache_dir,
-                                            max_vectors=glove_size)
-    glove_vectors.stoi = {k: v+2 for (k, v) in glove_vectors.stoi.items()}
-    glove_vectors.itos = ['<unk>', '<pad>'] + glove_vectors.itos
-    glove_vectors.stoi['<unk>'] = 0
-    glove_vectors.stoi['<pad>'] = 1
-    unk_vector = torch.zeros((1, glove_vectors.dim))
-    pad_vector = torch.mean(glove_vectors.vectors, dim=0, keepdim=True)
-    glove_vectors.vectors = torch.cat(
-        (unk_vector, pad_vector, glove_vectors.vectors), dim=0)
-
-    print('Loading GloVe vectors...Done')
-
-    return glove_vectors
-
+utils_helper = UtilsHelper()
 
 def initialize_model(
         argument_parser: ArgumentParserHelper,
@@ -96,7 +38,7 @@ def initialize_model(
 
     print('Loading model state...\r', end='')
 
-    total_embedding_dim = elmo_vectors_size + glove_vectors_dim
+    total_embedding_dim = Constants.DEFAULT_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=argument_parser.hidden_dim,
@@ -167,20 +109,6 @@ def create_metaphor_loaders(
 
     return metaphor_train_dataloader, metaphor_validation_dataloader
 
-def calculate_metrics(
-        targets: List,
-        predictions: List):
-
-    if sum(predictions) == 0:
-        return 0, 0, 0
-
-    precision = metrics.precision_score(targets, predictions, average="binary")
-    recall = metrics.recall_score(targets, predictions, average="binary")
-    f1 = metrics.f1_score(targets, predictions, average="binary")
-
-    return f1, precision, recall
-
-
 def iterate_hyperpartisan(
         joint_model: JointModel,
         optimizer: Optimizer,
@@ -209,7 +137,7 @@ def iterate_hyperpartisan(
         loss.backward()
         optimizer.step()
 
-    accuracy = get_accuracy(predictions, batch_targets)
+    accuracy = utils_helper.calculate_accuracy(predictions, batch_targets)
 
     return loss.item(), accuracy.item(), batch_targets.long().tolist(), predictions.round().long().tolist()
 
@@ -409,7 +337,7 @@ def train_and_eval_hyperpartisan(
                                                                                               dataloader=hyperpartisan_validation_dataloader,
                                                                                               device=device)
 
-    f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
+    f1, precision, recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
 
     log_metrics(
         summary_writer,
@@ -463,7 +391,7 @@ def train_and_eval_metaphor(
         dataloader=metaphor_validation_dataloader,
         device=device)
 
-    f1, _, _ = calculate_metrics(val_targets, val_predictions)
+    f1, _, _ = utils_helper.calculate_metrics(val_targets, val_predictions)
 
     print_metaphor_stats(f1, epoch, (best_f1_score < f1))
 
@@ -513,7 +441,7 @@ def train_and_eval_joint(
         dataloader=metaphor_validation_dataloader,
         device=device)
 
-    metaphor_f1, _, _ = calculate_metrics(val_targets, val_predictions)
+    metaphor_f1, _, _ = utils_helper.calculate_metrics(val_targets, val_predictions)
 
     print_metaphor_stats(metaphor_f1, epoch, False)
 
@@ -526,7 +454,7 @@ def train_and_eval_joint(
         dataloader=hyperpartisan_validation_dataloader,
         device=device)
 
-    hyperpartisan_f1, precision, recall = calculate_metrics(valid_targets, valid_predictions)
+    hyperpartisan_f1, precision, recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
 
     # Log results
 
@@ -638,15 +566,16 @@ def train_model(argument_parser: ArgumentParserHelper):
     :param argument_parser: Dictionary specifying the model configuration
     :return: None
     """
+
     # Flags for deterministic runs
     if argument_parser.deterministic:
-        initialize_deterministic_mode(argument_parser.deterministic)
+        utils_helper.initialize_deterministic_mode(argument_parser.deterministic)
 
     # Set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = load_glove_vectors(
+    glove_vectors = utils_helper.load_glove_vectors(
         argument_parser.vector_file_name, argument_parser.vector_cache_dir, argument_parser.glove_size)
 
     # Define the model, the optimizer and the loss module
