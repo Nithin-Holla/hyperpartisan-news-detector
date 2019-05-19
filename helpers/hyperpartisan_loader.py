@@ -14,7 +14,8 @@ class HyperpartisanLoader():
             hyperpartisan_dataset_folder: str,
             glove_vectors: Vectors,
             lowercase_sentences: bool = False,
-            articles_max_length: int = None) -> Tuple[HyperpartisanDataset, HyperpartisanDataset]:
+            articles_max_length: int = None,
+            load_train:bool = True) -> Tuple[HyperpartisanDataset, HyperpartisanDataset]:
         '''
         Parses the hyperpartisan files and creates HyperpartisanDataset objects which
         include information about the vocabulary and the embedding of the sentences
@@ -28,14 +29,17 @@ class HyperpartisanLoader():
             hyperpartisan_dataset_folder), 'Hyperpartisan dataset folder is not valid'
 
         # Train
-        train_filepath = os.path.join(
-            hyperpartisan_dataset_folder, 'train_byart.txt')
+        if load_train:
+            train_filepath = os.path.join(
+                hyperpartisan_dataset_folder, 'train_byart.txt')
 
-        train_dataset = HyperpartisanDataset(
-            filename=train_filepath,
-            glove_vectors=glove_vectors,
-            lowercase_sentences=lowercase_sentences,
-            articles_max_length=articles_max_length)
+            train_dataset = HyperpartisanDataset(
+                filename=train_filepath,
+                glove_vectors=glove_vectors,
+                lowercase_sentences=lowercase_sentences,
+                articles_max_length=articles_max_length)
+        else:
+            train_dataset = None
 
         # Validation
         validation_filepath = os.path.join(
