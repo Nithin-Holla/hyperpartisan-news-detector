@@ -31,6 +31,7 @@ class ArgumentParserHelper():
         self._loss_suppress_factor: float = 1.
         self._hyperpartisan_max_length: int = None
         self._num_layers: int = 1
+        self._metaphor_sampling_prob: float = 0.5
 
     def parse_arguments(self):
 
@@ -87,6 +88,8 @@ class ArgumentParserHelper():
                             help='The length after which the hyperpartisan articles will be cut off')
         parser.add_argument('--num_layers', type=int, default=1,
                             help='The number of layers in the biLSTM sentence encoder')
+        parser.add_argument('--metaphor_sampling_prob', type=float, default=0.5,
+                            help='The probability of sampling a metaphor batch in each step of joint training')
 
         config = parser.parse_args()
 
@@ -119,6 +122,7 @@ class ArgumentParserHelper():
         self._loss_suppress_factor = config.loss_suppress_factor
         self._hyperpartisan_max_length = config.hyperpartisan_max_length
         self._num_layers = config.num_layers
+        self._metaphor_sampling_prob = config.metaphor_sampling_prob
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -139,7 +143,8 @@ class ArgumentParserHelper():
               f'output_dropout_rate: {self._output_dropout_rate}\n' +
               f'loss_suppress_factor: {self._loss_suppress_factor}\n' +
               f'hyperpartisan_max_length: {self._hyperpartisan_max_length}\n' +
-              f'num_layers: {self._num_layers}\n')
+              f'num_layers: {self._num_layers}\n' +
+              f'metaphor_sampling_prob: {self._metaphor_sampling_prob}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -244,4 +249,7 @@ class ArgumentParserHelper():
     @property
     def num_layers(self) -> int:
         return self._num_layers
-    
+
+    @property
+    def metaphor_sampling_prob(self) -> float:
+        return self._metaphor_sampling_prob

@@ -319,6 +319,7 @@ def forward_full_joint_batches(
         device: torch.device,
         joint_metaphors_first: bool,
         loss_suppress_factor: float,
+        metaphor_sampling_prob: float,
         train: bool = False):
 
     all_hyperpartisan_targets = []
@@ -331,14 +332,13 @@ def forward_full_joint_batches(
     metaphor_iterator = iter(metaphor_dataloader)
     metaphor_iterator = itertools.cycle(metaphor_iterator)
 
-    metaphor_sample_prob = 0.75
     metaphor_steps = 0
     hyperpartisan_steps = 0
 
     while True:
         print(f'Step {hyperpartisan_steps+1}                  \r', end='')
 
-        task = 'metaphor' if np.random.random() < metaphor_sample_prob else 'hyperpartisan'
+        task = 'metaphor' if np.random.random() < metaphor_sampling_prob else 'hyperpartisan'
 
         if task == 'metaphor':
             metaphor_batch = next(metaphor_iterator)
@@ -478,6 +478,7 @@ def train_and_eval_joint(
         joint_metaphors_first: bool,
         epoch: int,
         loss_suppress_factor: float,
+        metaphor_sampling_prob: float,
         summary_writer: SummaryWriter,
         best_hyperpartisan_f1_score: bool):
 
@@ -493,6 +494,7 @@ def train_and_eval_joint(
         metaphor_dataloader=metaphor_train_dataloader,
         device=device,
         loss_suppress_factor=loss_suppress_factor,
+        metaphor_sampling_prob=metaphor_sampling_prob,
         joint_metaphors_first=joint_metaphors_first,
         train=True)
 
@@ -685,6 +687,7 @@ def train_model(argument_parser: ArgumentParserHelper):
                 joint_metaphors_first=argument_parser.joint_metaphors_first,
                 epoch=epoch,
                 loss_suppress_factor=argument_parser.loss_suppress_factor,
+                metaphor_sampling_prob=argument_parser.metaphor_sampling_prob,
                 summary_writer=summary_writer,
                 best_hyperpartisan_f1_score=best_f1)
 
