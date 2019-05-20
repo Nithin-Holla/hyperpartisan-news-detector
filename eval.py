@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 from torchtext.vocab import Vectors
 from model.JointModel import JointModel
 
+from enums.training_mode import TrainingMode
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 
@@ -57,11 +58,10 @@ def create_hyperpartisan_loaders(argument_parser, glove_vectors):
 def iterate_hyperpartisan(
 		joint_model,
 		batch_inputs,
-		batch_targets,
 		batch_recover_idx,
 		batch_num_sent,
 		batch_sent_lengths,
-        batch_feat,
+		batch_feat,
 		device):
 
 	batch_inputs = batch_inputs.to(device)
@@ -75,14 +75,32 @@ def iterate_hyperpartisan(
 
 	return predictions.round().long().tolist()
 
+def iterate_metaphor(joint_model, metaphor_data, device):
+
+	batch_inputs = metaphor_data[0].to(device).float()
+	batch_lengths = metaphor_data[1].to(device)
+
+	predictions = joint_model.forward(batch_inputs, batch_lengths, task=TrainingMode.Metaphor)
+
+	predictions = predictions.tolist()
+
+	metaphorical = []
+	for sent in predictions:
+		sent = [p[0] for p in sent]
+		metaphorical.append(sum(sent)/len(sent))
+	metaphorical = sum(metaphorical)/len(metaphorical)
+
+	return metaphorical
+
 def forward_full_hyperpartisan(
 		joint_model: JointModel,
 		dataloader: DataLoader,
 		device: torch.device):
 
 	all_predictions = []
+	all_ids = []
 
-	for step, (batch_inputs, _, batch_recover_idx, batch_num_sent, batch_sent_lengths, batch_feat) in enumerate(dataloader):
+	for step, (batch_inputs, _, batch_recover_idx, batch_num_sent, batch_sent_lengths, batch_feat, batch_ids) in enumerate(dataloader):
 
 		batch_predictions = iterate_hyperpartisan(
 			joint_model=joint_model,
@@ -93,10 +111,29 @@ def forward_full_hyperpartisan(
 			batch_feat=batch_feat,
 			device=device)
 
-		all_predictions += batch_predictions
+		print(batch_ids[0], batch_predictions[0])
 
-	return all_predictions
+		all_predictions.append(batch_predictions[0])
+		all_ids.append(batch_ids[0])
 
+	return all_predictions, all_ids
+
+
+def forward_through_metaphor(joint_model, dataloader, device):
+
+	all_metaphors = []
+	all_ids = []
+
+	for step, (batch_inputs, _, batch_recover_idx, batch_num_sent, batch_sent_lengths, batch_feat, batch_ids) in enumerate(dataloader):
+
+		metaphorical = iterate_metaphor(joint_model, (batch_inputs, batch_sent_lengths), device)
+
+		all_metaphors.append(metaphorical)
+		all_ids.append(batch_ids[0])
+
+		print(batch_ids[0], metaphorical)
+
+	return all_metaphors, all_ids
 
 
 def eval_model(argument_parser):
@@ -115,17 +152,23 @@ def eval_model(argument_parser):
 
 	joint_model.eval()
 
-	with torch.no_grad():
+	if argument_parser.mode == "normal":
 
-		predictions = forward_full_hyperpartisan(
-				joint_model=joint_model,
-				dataloader=hyperpartisan_test_dataloader,
-				device=device)
+		with torch.no_grad():
+			predictions, ids = forward_full_hyperpartisan(joint_model, hyperpartisan_test_dataloader, device)
 
-	#################
-	# do smthing with predictions (not sure yet)
-	print(predictions)
-	#################
+		with open("output.txt", "w") as f:
+			for Id, prediction in zip(ids, predictions):
+				f.write(Id + " " + str(prediction == 1) + "\n")
+
+	elif argument_parser.mode == "metaphorical":
+
+		with torch.no_grad():
+			metaphorical, ids = forward_through_metaphor(joint_model, hyperpartisan_test_dataloader, device)
+
+		with open("metaphorical.txt", "w") as f:
+			for Id, meta in zip(ids, metaphorical):
+				f.write(Id + " " + str(meta) + "\n")
 
 
 if __name__ == '__main__':
@@ -137,18 +180,14 @@ if __name__ == '__main__':
 						help='File in which vectors are saved')
 	parser.add_argument('--vector_cache_dir', type=str, default='vector_cache',
 						help='Directory where vectors would be cached')
-	parser.add_argument('--batch_size', type=int, default=2,
+	parser.add_argument('--batch_size', type=int, default=1,
 						help='Batch size for training the model')
 	parser.add_argument('--hidden_dim', type=int, default=128,
 						help='Hidden dimension of the recurrent network')
-	parser.add_argument('--glove_size', type=int, default = 1000,
+	parser.add_argument('--glove_size', type=int, default = 10000,
 						help='Number of GloVe vectors to load initially')
 	parser.add_argument('--hyperpartisan_dataset_folder', type=str,
 						help='Path to the hyperpartisan dataset')
-	parser.add_argument('--lowercase', action='store_true', default = False,
-						help='Lowercase the sentences before training')
-	parser.add_argument('--not_tokenize', action='store_true', default = False,
-						help='Do not tokenize the sentences before training')
 	parser.add_argument('--txt_file', type = str, default = "",
 						help='text file name containing the processed xml file')
 	parser.add_argument('--hdf5_file', type = str, default = "",
@@ -157,6 +196,7 @@ if __name__ == '__main__':
 						help='method for final emlo embeddings used')
 	parser.add_argument('--num_layers', type = int, default = 1,
 						help='Number of layers to be used in the biLSTM sentence encoder')
+	parser.add_argument('--mode', type = str, choices = ["normal", "metaphorical"], default = "metaphorical")
 
 	argument_parser = parser.parse_args()
 

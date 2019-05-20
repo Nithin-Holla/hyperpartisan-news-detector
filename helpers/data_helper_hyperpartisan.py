@@ -55,7 +55,7 @@ class DataHelperHyperpartisan():
         return train_loader, validation_loader, test_loader
 
     @classmethod
-    def _sort_batch(cls, batch, targets, num_sentences, lengths, extra_feat):
+    def _sort_batch(cls, batch, targets, num_sentences, lengths, extra_feat, ids):
         """
         Sort a minibatch by the length of the sequences with the longest sequences first
         return the sorted batch targes and sequence lengths.
@@ -68,7 +68,7 @@ class DataHelperHyperpartisan():
 
         # print(seq_tensor.shape, targets.shape, recover_idx.shape, num_sentences.shape, seq_lengths.shape, extra_feat.shape)
 
-        return seq_tensor, targets, recover_idx, num_sentences, seq_lengths, extra_feat
+        return seq_tensor, targets, recover_idx, num_sentences, seq_lengths, extra_feat, ids
 
     @classmethod
     def _pad_and_sort_batch(cls, DataLoaderBatch):
@@ -79,7 +79,7 @@ class DataHelperHyperpartisan():
         batch_size = len(DataLoaderBatch)
         batch_split = list(zip(*DataLoaderBatch))
 
-        list_of_sequences, targets, list_of_lengths, num_of_sent, extra_feat = batch_split[0], batch_split[1], batch_split[2], batch_split[3], batch_split[4]
+        list_of_sequences, targets, list_of_lengths, num_of_sent, extra_feat, ids = batch_split[0], batch_split[1], batch_split[2], batch_split[3], batch_split[4], batch_split[5]
 
         # concat_lengths - concatted lengths of each sentence - [ batch_size * n_sentences ]
         concat_lengths = np.array([length for lengths in list_of_lengths for length in lengths])
@@ -93,4 +93,4 @@ class DataHelperHyperpartisan():
         for i, l in enumerate(concat_lengths):
             padded_sequences[i][0:l][:] = concat_sequences[i]
 
-        return cls._sort_batch(torch.Tensor(padded_sequences), torch.Tensor(targets), torch.LongTensor(num_of_sent), torch.LongTensor(concat_lengths), torch.Tensor(extra_feat))
+        return cls._sort_batch(torch.Tensor(padded_sequences), torch.Tensor(targets), torch.LongTensor(num_of_sent), torch.LongTensor(concat_lengths), torch.Tensor(extra_feat), ids)

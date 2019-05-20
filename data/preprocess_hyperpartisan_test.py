@@ -4,7 +4,7 @@ from nltk import sent_tokenize, word_tokenize
 import numpy as np
 import argparse
 
-def emlo_txtfile(txtfile, title_tokens, body_tokens):
+def emlo_txtfile(txtfile, title_tokens, body_tokens, data_size):
 
 	sentences_filename = txtfile.split(".")[0] + "_elmo.txt"
 	print("Writing {} file".format(sentences_filename))
@@ -20,6 +20,9 @@ def emlo_txtfile(txtfile, title_tokens, body_tokens):
 				sentence_text = ' '.join(sentence_tokens)
 
 				sentences_file.write(f'{sentence_text}\n')
+
+			if index == data_size:
+				break
 
 def xml_parser(argument_parser):
 
@@ -45,6 +48,8 @@ def xml_parser(argument_parser):
 	df = pd.DataFrame(columns = columns)
 
 	body_tags = ["p", "a", "q"]
+
+	n_articles = 0
 
 	# create iterators
 	article_iter = ET.iterparse(argument_parser.xml_file, events = ("start", "end"))
@@ -86,6 +91,8 @@ def xml_parser(argument_parser):
 
 				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, Length_in_sent, Length_in_words, n_links/n_all, n_quotes/n_all]], index = [Id], columns = columns)
 				df = df.append(df_elem)
+
+				n_articles += 1
 			
 		# append this text to the article body	
 		elif article_elem.tag in body_tags:
@@ -101,9 +108,11 @@ def xml_parser(argument_parser):
 					if "&#" not in article_elem.text:
 
 						Text = clean_text(article_elem.text)
-						Body += Text				
+						Body += Text	
 
-	df.index = df.index.astype(int)
+
+		if n_articles == argument_parser.data_size:
+			break			
 						
 	return df 
 
@@ -114,7 +123,7 @@ if __name__ == '__main__':
 						help="Xml file name that contains the raw data")
 	parser.add_argument('--txt_file', type = str, default = "test_byart.txt",
 						help='text file name containing the processed xml file')
-	parser.add_argument('--data_size', type = int, default = 2,
+	parser.add_argument('--data_size', type = int, default = 6,
 						help='Number of articles to load (for debugging)')
 
 	argument_parser = parser.parse_args()
@@ -125,5 +134,5 @@ if __name__ == '__main__':
 	print("Parsing xml file data... Done")
 
 	print("Creating elmo text file...")
-	emlo_txtfile(argument_parser.txt_file, df.title_tokens.tolist(), df.body_tokens.tolist())
+	emlo_txtfile(argument_parser.txt_file, df.title_tokens.tolist(), df.body_tokens.tolist(), argument_parser.data_size)
 	print("Creating elmo text file... Done")
