@@ -105,7 +105,7 @@ def initialize_model(
                              doc_encoder_dropout_rate=argument_parser.doc_encoder_dropout_rate,
                              output_dropout_rate=argument_parser.output_dropout_rate,
                              device=device).to(device)
-    optimizer = optim.SGD(joint_model.parameters(), momentum=0.9,
+    optimizer = optim.RMSprop(joint_model.parameters(),
                            lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
     # Load the checkpoint if found
