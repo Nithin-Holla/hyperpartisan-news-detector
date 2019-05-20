@@ -12,11 +12,11 @@ class SentenceEncoder(nn.Module):
 
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
-        self.encoder = nn.LSTM(embedding_dim, hidden_dim,
+        self.encoder = nn.GRU(embedding_dim, hidden_dim,
                                num_layers=num_layers, bidirectional=True, batch_first=True)
 
         self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
-                                      nn.Linear((2 * hidden_dim) + embedding_dim, 2 * hidden_dim),
+                                      nn.Linear(2 * hidden_dim, 2 * hidden_dim),
                                       nn.Tanh())
         self.context_vector = nn.Parameter(torch.randn((2 * hidden_dim, 1)))
         stdv = 1. / math.sqrt(self.context_vector.size(0))
@@ -40,7 +40,6 @@ class SentenceEncoder(nn.Module):
         packed_seq = pack_padded_sequence(x, len_x, batch_first=True)
         out, _ = self.encoder(packed_seq)
         pad_packed_states, _ = pad_packed_sequence(out, batch_first=True)
-        pad_packed_states = torch.cat([pad_packed_states, x[:, :, :self.embedding_dim] ], dim=2)
         pre_attn = self.pre_attn(pad_packed_states)
 
         # Masked attention

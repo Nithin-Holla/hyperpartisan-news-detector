@@ -10,7 +10,7 @@ class DocumentEncoder(nn.Module):
         super(DocumentEncoder, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.encoder = nn.LSTM(input_dim, hidden_dim, bidirectional=True, batch_first=True)
+        self.encoder = nn.GRU(input_dim, hidden_dim, bidirectional=True, batch_first=True)
         self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
                                       nn.Linear(2 * hidden_dim, 2 * hidden_dim),
                                       nn.Tanh())
