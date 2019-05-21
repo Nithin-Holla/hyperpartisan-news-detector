@@ -29,7 +29,7 @@ class HyperpartisanDataset(data.Dataset):
 		self.lowercase_sentences = lowercase_sentences
 		self.articles_max_length = articles_max_length
 
-		self._labels, self._title_tokens, self._body_tokens, self._extra_feat = self._parse_csv_file(
+		self._labels, self._title_tokens, self._body_tokens, self._extra_feat, self._ids = self._parse_csv_file(
 			filename)
 
 		self.article_indexes = {}
@@ -51,6 +51,7 @@ class HyperpartisanDataset(data.Dataset):
 
 		elmo_embedding_file = h5py.File(self.elmo_filename, 'r')
 
+		ids = self._ids[idx]
 		extra_feat = self._extra_feat[idx]
 		title_tokens = self._title_tokens[idx]
 		body_tokens = self._body_tokens[idx]
@@ -107,7 +108,7 @@ class HyperpartisanDataset(data.Dataset):
 
 		# print(len(result_embeddings), len(is_hyperpartisan), len(body_tokens_per_sentence), len(body_sentences_amount), len(extra_feat))
 
-		return result_embeddings, is_hyperpartisan, body_tokens_per_sentence, body_sentences_amount, extra_feat
+		return result_embeddings, is_hyperpartisan, body_tokens_per_sentence, body_sentences_amount, extra_feat, ids
 
 	def __len__(self):
 		return self._data_size
@@ -176,7 +177,7 @@ class HyperpartisanDataset(data.Dataset):
 
 				assert len(xtr) == 18
 
-		return labels, title_tokens, body_tokens, extra_feat
+		return labels, title_tokens, body_tokens, extra_feat, ids
 
 	def _assert_elmo_vectors_file(self, csv_filename, title_tokens, body_tokens):
 		dirname = os.path.dirname(csv_filename)
