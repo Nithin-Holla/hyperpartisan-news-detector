@@ -3,6 +3,8 @@ import os
 
 from statsmodels.stats.contingency_tables import mcnemar
 from mlxtend.evaluate import permutation_test
+from scipy import stats
+from scipy.stats import ttest_ind
 
 import torch
 from torch.utils.data import DataLoader
@@ -167,43 +169,58 @@ if __name__ == '__main__':
         dataloader=hyperpartisan_validation_dataloader,
         device=device)
 
-    hyperpartisan_f1, _, _ = utils_helper.calculate_metrics(hyperpartisan_valid_targets, hyperpartisan_valid_predictions)
+    hyperpartisan_f1, hyperpartisan_precision, hyperpartisan_recall = utils_helper.calculate_metrics(hyperpartisan_valid_targets, hyperpartisan_valid_predictions)
 
-    print(f'Hyperpartisan F1 score: {hyperpartisan_f1}')
+    print(f'Hyperpartisan F1 score: {hyperpartisan_f1}, Precision: {hyperpartisan_precision}, Recall: {hyperpartisan_recall}, Accuracy: {hyperpartisan_valid_accuracy}')
 
     joint_valid_accuracy, joint_valid_targets, joint_valid_predictions = forward_full_hyperpartisan(
         joint_model=joint_model,
         dataloader=hyperpartisan_validation_dataloader,
         device=device)
 
-    joint_f1, _, _ = utils_helper.calculate_metrics(joint_valid_targets, joint_valid_predictions)
+    joint_f1, joint_precision, joint_recall = utils_helper.calculate_metrics(joint_valid_targets, joint_valid_predictions)
 
-    print(f'Joint F1 score: {joint_f1}')
+    print(f'Joint F1 score: {joint_f1}, Precision: {joint_precision}, Recall: {joint_recall}, Accuracy: {joint_valid_accuracy}')
 
 
     print('Calculating p value using McNemar\'s test...\r', end='')
 
-    contingency_table = create_contingency_table(
-        hyperpartisan_valid_targets,
-        hyperpartisan_valid_predictions,
-        joint_valid_predictions)
+    # roll your own t-test:
+    N=10
+    hyperpartisan_valid_predictions = np.array(hyperpartisan_valid_predictions)
+    joint_valid_predictions = np.array(joint_valid_predictions)
+    var_a = hyperpartisan_valid_predictions.var(ddof=1) # unbiased estimator, divide by N-1 instead of N
+    var_b = joint_valid_predictions.var(ddof=1)
+    s = np.sqrt( (var_a + var_b) / 2 ) # balanced standard deviation
+    t = (hyperpartisan_valid_predictions.mean() - joint_valid_predictions.mean()) / (s * np.sqrt(2.0/N)) # t-statistic
+    df = 2*N - 2 # degrees of freedom
+    p = 1 - stats.t.cdf(np.abs(t), df=df) # one-sided test p-value
+    print("t:\t", t, "p:\t", 2*p) # two-sided test p-value
+
+    t2, p2 = ttest_ind(hyperpartisan_valid_predictions, joint_valid_predictions)
+    print("t2:\t", t2, "p2:\t", p2)
+
+    # contingency_table = create_contingency_table(
+    #     hyperpartisan_valid_targets,
+    #     hyperpartisan_valid_predictions,
+    #     joint_valid_predictions)
     
-    result = mcnemar(contingency_table, exact=True)
+    # result = mcnemar(contingency_table, exact=True)
 
     # p_value = permutation_test(hyperpartisan_valid_predictions, joint_valid_predictions,
     #                        method='approximate',
     #                        num_rounds=10000,
     #                        seed=0)
 
-    print('Calculating p value using McNemar\'s test...Done')
+    # print('Calculating p value using McNemar\'s test...Done')
 
-    # summarize the finding
-    print('statistic=%.3f, p-value=%.3f' % (result.statistic, result.pvalue))
+    # # summarize the finding
+    # print('statistic=%.3f, p-value=%.3f' % (result.statistic, result.pvalue))
     
-    print(f'p-value: {p_value}')
+    # print(f'p-value: {p_value}')
 
-    # interpret the p-value
-    if p_value > config.alpha_value:
-        print('Same proportions of errors (non-significant difference)')
-    else:
-        print('Significant difference found')
+    # # interpret the p-value
+    # if p_value > config.alpha_value:
+    #     print('Same proportions of errors (non-significant difference)')
+    # else:
+    #     print('Significant difference found')
