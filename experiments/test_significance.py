@@ -2,6 +2,7 @@ import argparse
 import os
 
 from statsmodels.stats.contingency_tables import mcnemar
+from mlxtend.evaluate import permutation_test
 
 import torch
 from torch.utils.data import DataLoader
@@ -187,16 +188,22 @@ if __name__ == '__main__':
         hyperpartisan_valid_predictions,
         joint_valid_predictions)
     
-    # calculate mcnemar test
     result = mcnemar(contingency_table, exact=True)
 
-    print('Calculating p value using Permutation test...Done')
+    # p_value = permutation_test(hyperpartisan_valid_predictions, joint_valid_predictions,
+    #                        method='approximate',
+    #                        num_rounds=10000,
+    #                        seed=0)
+
+    print('Calculating p value using McNemar\'s test...Done')
 
     # summarize the finding
     print('statistic=%.3f, p-value=%.3f' % (result.statistic, result.pvalue))
     
+    print(f'p-value: {p_value}')
+
     # interpret the p-value
-    if result.pvalue > config.alpha_value:
+    if p_value > config.alpha_value:
         print('Same proportions of errors (non-significant difference)')
     else:
         print('Significant difference found')
