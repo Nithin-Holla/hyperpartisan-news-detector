@@ -142,8 +142,8 @@ def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartis
     range_v = max(subtracted_word_attention) - min_v
     normalized_weights = (((subtracted_word_attention - min_v) / range_v)[:len(sentence_labels)])[np.newaxis, :]
 
-    plt.xticks(rotation=90)
     sns.heatmap(normalized_weights, cmap='Blues', yticklabels=False, xticklabels=sentence_labels, cbar=False, square=True)
+    plt.xticks(rotation=90)
     plt.tight_layout()
     plt.show()
 
