@@ -79,8 +79,8 @@ class DataHelperHyperpartisan():
         batch_size = len(DataLoaderBatch)
         batch_split = list(zip(*DataLoaderBatch))
 
-        list_of_sequences, targets, list_of_lengths, num_of_sent, extra_feat, ids = batch_split[0], batch_split[1], batch_split[2], batch_split[3], batch_split[4], batch_split[5]
-
+        list_of_sequences, targets, list_of_lengths, num_of_sent, extra_feat = batch_split[0], batch_split[1], batch_split[2], batch_split[3], batch_split[4]#, batch_split[5]
+        ids = []
         # concat_lengths - concatted lengths of each sentence - [ batch_size * n_sentences ]
         concat_lengths = np.array([length for lengths in list_of_lengths for length in lengths])
         # concat_sequences - the embeddings for each batch for each sentence for each word - [ (batch_size * n_sentences) x n_words x embedding_dim ]
