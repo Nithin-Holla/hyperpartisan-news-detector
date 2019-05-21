@@ -2,7 +2,6 @@ import argparse
 import os
 
 from statsmodels.stats.contingency_tables import mcnemar
-from mlxtend.evaluate import permutation_test
 
 import torch
 from torch.utils.data import DataLoader
@@ -10,6 +9,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 
 import sys
+
 sys.path.append('..')
 
 from model.JointModel import JointModel
@@ -23,6 +23,7 @@ from enums.training_mode import TrainingMode
 
 utils_helper = UtilsHelper()
 
+
 def load_model_state(model, model_checkpoint_path):
     if not os.path.isfile(model_checkpoint_path):
         raise Exception('Model checkpoint path is invalid')
@@ -33,23 +34,23 @@ def load_model_state(model, model_checkpoint_path):
 
     model.load_state_dict(checkpoint['model_state_dict'])
 
+
 def initialize_models(
         hyperpartisan_model_checkpoint_path: str,
         joint_model_checkpoint_path: str,
         device: torch.device,
         glove_vectors_dim: int):
-
     print('Loading model state...\r', end='')
 
     total_embedding_dim = Constants.DEFAULT_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
 
     hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
-                             hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
-                             num_layers=Constants.DEFAULT_NUM_LAYERS,
-                             sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
-                             doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
-                             output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
-                             device=device).to(device)
+                                     hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                                     num_layers=Constants.DEFAULT_NUM_LAYERS,
+                                     sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
+                                     doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
+                                     output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
+                                     device=device).to(device)
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
@@ -58,7 +59,7 @@ def initialize_models(
                              doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                              output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
                              device=device).to(device)
-    
+
     load_model_state(hyperpartisan_model, hyperpartisan_model_checkpoint_path)
     load_model_state(joint_model, joint_model_checkpoint_path)
 
@@ -66,27 +67,20 @@ def initialize_models(
 
     return hyperpartisan_model, joint_model
 
-def create_contingency_table(targets, predictions1, predictions2):
-    assert len(targets) == len(predictions1)
-    assert len(targets) == len(predictions2)
 
-    contingency_table = np.zeros((2, 2))
+def get_interesting_articles(targets, hyp_pred, joint_pred):
+    assert len(targets) == len(hyp_pred)
+    assert len(targets) == len(joint_pred)
 
-    targets_length = len(targets)
-    contingency_table[0, 0] = sum([targets[i] == predictions1[i] and targets[i] == predictions2[i] for i in range(targets_length)]) # both predictions are correct
-    contingency_table[0, 1] = sum([targets[i] == predictions1[i] and targets[i] != predictions2[i] for i in range(targets_length)]) # predictions1 is correct and predictions2 is wrong
-    contingency_table[1, 0] = sum([targets[i] != predictions1[i] and targets[i] == predictions2[i] for i in range(targets_length)]) # predictions1 is wrong and predictions2 is correct
-    contingency_table[1, 1] = sum([targets[i] != predictions1[i] and targets[i] != predictions2[i] for i in range(targets_length)]) # both predictions are wrong
+    interesting_articles = np.where(targets == 1 and hyp_pred == 0 and joint_pred == 1)
 
-    print(contingency_table)
+    return interesting_articles
 
-    return contingency_table
 
 def forward_full_hyperpartisan(
         joint_model: JointModel,
         dataloader: DataLoader,
         device: torch.device):
-
     all_targets = []
     all_predictions = []
 
@@ -104,7 +98,8 @@ def forward_full_hyperpartisan(
         batch_feat = hyperpartisan_data[5].to(device)
 
         batch_predictions = joint_model.forward(batch_inputs, (batch_recover_idx,
-                                                        batch_num_sent, batch_sent_lengths, batch_feat), task=TrainingMode.Hyperpartisan)
+                                                               batch_num_sent, batch_sent_lengths, batch_feat),
+                                                task=TrainingMode.Hyperpartisan)
 
         accuracy = utils_helper.calculate_accuracy(batch_predictions, batch_targets)
 
@@ -115,6 +110,7 @@ def forward_full_hyperpartisan(
     final_accuracy = running_accuracy / (step + 1)
 
     return final_accuracy, all_targets, all_predictions
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -143,13 +139,14 @@ if __name__ == '__main__':
 
     utils_helper.initialize_deterministic_mode(config.deterministic)
 
-    device = torch.device("cuda:0")# if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0")  # if torch.cuda.is_available() else "cpu")
 
     glove_vectors = utils_helper.load_glove_vectors(
         config.vector_file_name, config.vector_cache_dir, config.glove_size)
 
-    hyperpartisan_model, joint_model = initialize_models(config.hyperpartisan_model_checkpoint, config.joint_model_checkpoint, device, glove_vectors.dim)
-    
+    hyperpartisan_model, joint_model = initialize_models(config.hyperpartisan_model_checkpoint,
+                                                         config.joint_model_checkpoint, device, glove_vectors.dim)
+
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
         glove_vectors=glove_vectors,
@@ -167,7 +164,8 @@ if __name__ == '__main__':
         dataloader=hyperpartisan_validation_dataloader,
         device=device)
 
-    hyperpartisan_f1, _, _ = utils_helper.calculate_metrics(hyperpartisan_valid_targets, hyperpartisan_valid_predictions)
+    hyperpartisan_f1, _, _ = utils_helper.calculate_metrics(hyperpartisan_valid_targets,
+                                                            hyperpartisan_valid_predictions)
 
     print(f'Hyperpartisan F1 score: {hyperpartisan_f1}')
 
@@ -176,34 +174,11 @@ if __name__ == '__main__':
         dataloader=hyperpartisan_validation_dataloader,
         device=device)
 
-    joint_f1, _, _ = utils_helper.calculate_metrics(joint_valid_targets, joint_valid_predictions)
-
-    print(f'Joint F1 score: {joint_f1}')
-
-
-    print('Calculating p value using McNemar\'s test...\r', end='')
-
-    contingency_table = create_contingency_table(
+    interesting_articles = get_interesting_articles(
         hyperpartisan_valid_targets,
         hyperpartisan_valid_predictions,
         joint_valid_predictions)
-    
-    result = mcnemar(contingency_table, exact=True)
 
-    # p_value = permutation_test(hyperpartisan_valid_predictions, joint_valid_predictions,
-    #                        method='approximate',
-    #                        num_rounds=10000,
-    #                        seed=0)
+    interesting_articles += 2
 
-    print('Calculating p value using McNemar\'s test...Done')
-
-    # summarize the finding
-    print('statistic=%.3f, p-value=%.3f' % (result.statistic, result.pvalue))
-    
-    print(f'p-value: {p_value}')
-
-    # interpret the p-value
-    if p_value > config.alpha_value:
-        print('Same proportions of errors (non-significant difference)')
-    else:
-        print('Significant difference found')
+    print("Interesting articles are: {}".format(interesting_articles))
