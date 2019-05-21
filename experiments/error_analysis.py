@@ -72,7 +72,15 @@ def get_interesting_articles(targets, hyp_pred, joint_pred):
     assert len(targets) == len(hyp_pred)
     assert len(targets) == len(joint_pred)
 
-    interesting_articles = np.where(targets == 1 and hyp_pred == 0 and joint_pred == 1)
+    interesting_articles = np.where(targets == 1 and hyp_pred == 0 and joint_pred == 1)[0]
+
+    print('[', end='')
+    for i in range(len(targets)):
+        if targets[i] == 1 and hyp_pred[i] == 0 and joint_pred[i] == 1:
+            print(f'{i},', end='')
+            
+            # print(f'{targets[i]} - {hyp_pred[i]} - {joint_pred[i]}')
+    print(']')
 
     return interesting_articles
 
