@@ -6,6 +6,8 @@ from datasets.hyperpartisan_dataset import HyperpartisanDataset
 
 from typing import Tuple
 
+from enums.elmo_model import ELMoModel
+
 
 class HyperpartisanLoader():
 
@@ -13,6 +15,7 @@ class HyperpartisanLoader():
     def get_hyperpartisan_datasets(
             hyperpartisan_dataset_folder: str,
             glove_vectors: Vectors,
+            elmo_model: ELMoModel,
             lowercase_sentences: bool = False,
             articles_max_length: int = None,
             load_train:bool = True) -> Tuple[HyperpartisanDataset, HyperpartisanDataset]:
@@ -22,6 +25,7 @@ class HyperpartisanLoader():
 
         :param str hyperpartisan_dataset_folder: The folder where the hyperpartisan dataset files should be
         :param Vectors glove_vectors: The vector that will be used to embed the words in the hyperpartisan dataset. It could be GloVe for example
+        :param ELMoModel elmo_model: The ELMo from which vectors are used
         :param bool lowercase_sentences: Specify whether the sentences should be lowercased before embedding them
         '''
 
@@ -36,6 +40,7 @@ class HyperpartisanLoader():
             train_dataset = HyperpartisanDataset(
                 filename=train_filepath,
                 glove_vectors=glove_vectors,
+                elmo_model=elmo_model,
                 lowercase_sentences=lowercase_sentences,
                 articles_max_length=articles_max_length)
         else:
@@ -48,6 +53,7 @@ class HyperpartisanLoader():
         validation_dataset = HyperpartisanDataset(
             filename=validation_filepath,
             glove_vectors=glove_vectors,
+            elmo_model=elmo_model,
             lowercase_sentences=lowercase_sentences,
             articles_max_length=articles_max_length)
 

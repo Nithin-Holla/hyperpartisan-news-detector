@@ -7,11 +7,13 @@ from matplotlib import pyplot as plt
 import pandas as pd
 from ast import literal_eval
 
+from enums.elmo_model import ELMoModel
 from enums.training_mode import TrainingMode
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 from helpers.hyperpartisan_loader import HyperpartisanLoader
 from model.JointModel import JointModel
 from helpers.utils_helper import UtilsHelper
+from constants import Constants
 
 utils_helper = UtilsHelper()
 
@@ -157,7 +159,11 @@ def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartis
 
 def predict(config):
     # Define the model
-    total_embedding_dim = 1024 + 300
+    if config.elmo_model == ELMoModel.Original:
+        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION + 300
+    elif config.elmo_model == ELMoModel.Small:
+        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION + 300
+
     device = torch.device('cpu')
     hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
                                      hidden_dim=config.hidden_dim,
@@ -200,6 +206,7 @@ def predict(config):
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
         glove_vectors=glove_vectors,
+        elmo_model=config.elmo_model,
         lowercase_sentences=config.lowercase)
 
     _, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
@@ -250,6 +257,8 @@ if __name__ == '__main__':
     parser.add_argument('--skip_connection', action='store_true',
                         help='Indicates whether a skip connection is to be used in the sentence encoder '
                              'while training on hyperpartisan task')
+    parser.add_argument('--elmo_model', type=ELMoModel, choices=list(ELMoModel), default=ELMoModel.Original,
+                        help='ELMo model from which vectors are used')
 
     config = parser.parse_args()
 

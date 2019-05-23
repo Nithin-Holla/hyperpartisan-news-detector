@@ -2,7 +2,10 @@ import argparse
 import torch
 from torch.utils.data import DataLoader
 from torchtext.vocab import Vectors
+
+from enums.elmo_model import ELMoModel
 from model.JointModel import JointModel
+from constants import Constants
 
 from enums.training_mode import TrainingMode
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
@@ -24,7 +27,12 @@ def load_glove_vectors(argument_parser):
     return glove_vectors
 
 
-def initialize_model(argument_parser, device, glove_vectors_dim=300, elmo_vectors_size=1024):
+def initialize_model(argument_parser, device, glove_vectors_dim=300):
+    if argument_parser.elmo_model == ELMoModel.Original:
+        elmo_vectors_size = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION
+    elif argument_parser.elmo_model == ELMoModel.Small:
+        elmo_vectors_size = Constants.SMALL_ELMO_EMBEDDING_DIMENSION
+
     total_embedding_dim = elmo_vectors_size + glove_vectors_dim
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
@@ -43,7 +51,7 @@ def initialize_model(argument_parser, device, glove_vectors_dim=300, elmo_vector
 
 
 def create_hyperpartisan_loaders(argument_parser, glove_vectors):
-    hyperpartisan_test_dataset = HyperpartisanDataset(argument_parser.txt_file, glove_vectors)
+    hyperpartisan_test_dataset = HyperpartisanDataset(argument_parser.txt_file, glove_vectors, argument_parser.elmo_model)
 
     _, _, hyperpartisan_test_dataloader = DataHelperHyperpartisan.create_dataloaders(
         train_dataset=None,
@@ -199,6 +207,8 @@ if __name__ == '__main__':
     parser.add_argument('--skip_connection', action='store_true',
                         help='Indicates whether a skip connection is to be used in the sentence encoder '
                              'while training on hyperpartisan task')
+    parser.add_argument('--elmo_model', type=ELMoModel, choices=list(ELMoModel), default=ELMoModel.Original,
+                        help='ELMo model from which vectors are used')
 
     argument_parser = parser.parse_args()
 

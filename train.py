@@ -9,6 +9,7 @@ import os
 
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from datasets.metaphor_dataset import MetaphorDataset
+from enums.elmo_model import ELMoModel
 
 from helpers.hyperpartisan_loader import HyperpartisanLoader
 from helpers.metaphor_loader import MetaphorLoader
@@ -38,7 +39,10 @@ def initialize_model(
 
     print('Loading model state...\r', end='')
 
-    total_embedding_dim = Constants.DEFAULT_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
+    if argument_parser.elmo_model == ELMoModel.Original:
+        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
+    elif argument_parser.elmo_model == ELMoModel.Small:
+        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=argument_parser.hidden_dim,
@@ -78,6 +82,7 @@ def create_hyperpartisan_loaders(
     hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=argument_parser.hyperpartisan_dataset_folder,
         glove_vectors=glove_vectors,
+        elmo_model=argument_parser.elmo_model,
         lowercase_sentences=argument_parser.lowercase,
         articles_max_length=argument_parser.hyperpartisan_max_length)
 
@@ -97,6 +102,7 @@ def create_metaphor_loaders(
     metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
         metaphor_dataset_folder=argument_parser.metaphor_dataset_folder,
         glove_vectors=glove_vectors,
+        elmo_model=argument_parser.elmo_model,
         lowercase_sentences=argument_parser.lowercase,
         tokenize_sentences=argument_parser.tokenize,
         only_news=argument_parser.only_news)

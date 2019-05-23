@@ -1,5 +1,6 @@
 import argparse
 
+from enums.elmo_model import ELMoModel
 from enums.training_mode import TrainingMode
 from constants import Constants
 
@@ -62,6 +63,8 @@ class ArgumentParserHelper():
         parser.add_argument('--skip_connection', action='store_true',
                             help='Indicates whether a skip connection is to be used in the sentence encoder '
                                  'while training on hyperpartisan task')
+        parser.add_argument('--elmo_model', type=ELMoModel, choices=list(ELMoModel), default=ELMoModel.Original,
+                            help='ELMo model from which vectors are used')
 
         config = parser.parse_args()
 
@@ -95,6 +98,7 @@ class ArgumentParserHelper():
         self._hyperpartisan_max_length: int = config.hyperpartisan_max_length
         self._num_layers: int = config.num_layers
         self._skip_connection: bool = config.skip_connection
+        self._elmo_model: ELMoModel = config.elmo_model
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -116,7 +120,8 @@ class ArgumentParserHelper():
               f'loss_suppress_factor: {self._loss_suppress_factor}\n' +
               f'hyperpartisan_max_length: {self._hyperpartisan_max_length}\n' +
               f'num_layers: {self._num_layers}\n' +
-              f'skip_connection: {self._skip_connection}\n')
+              f'skip_connection: {self._skip_connection}\n' +
+              f'elmo_model: {self._elmo_model}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -225,3 +230,7 @@ class ArgumentParserHelper():
     @property
     def skip_connection(self) -> bool:
         return self._skip_connection
+
+    @property
+    def elmo_model(self) -> ELMoModel:
+        return self._elmo_model

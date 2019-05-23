@@ -15,6 +15,8 @@ from typing import List, Tuple, Dict, Set
 
 import h5py
 
+from enums.elmo_model import ELMoModel
+
 
 class HyperpartisanDataset(data.Dataset):
 
@@ -22,10 +24,12 @@ class HyperpartisanDataset(data.Dataset):
 			self,
 			filename: str,
 			glove_vectors: Vectors,
+            elmo_model: ELMoModel,
 			lowercase_sentences: bool = False,
             articles_max_length: int = None):
 
 		self.glove_vectors = glove_vectors
+		self.elmo_model = elmo_model
 		self.lowercase_sentences = lowercase_sentences
 		self.articles_max_length = articles_max_length
 
@@ -219,7 +223,10 @@ class HyperpartisanDataset(data.Dataset):
 		Creates a file suffix which includes all current configuration options
 		'''
 
-		file_suffix = '_elmo'
+		if self.elmo_model == ELMoModel.Original:
+			file_suffix = '_elmo'
+		elif self.elmo_model == ELMoModel.Small:
+			file_suffix = '_elmo_small'
 
 		if self.lowercase_sentences:
 			file_suffix = f'_lowercase{file_suffix}'

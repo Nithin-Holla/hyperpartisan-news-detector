@@ -1,19 +1,18 @@
-import torchtext
 import os
 import numpy as np
 
 from torchtext.vocab import Vectors
 
-from torch.autograd import Variable
 import torch.utils.data as data
 import torch
-import torch.nn as nn
 
 import csv
 import ast
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple, Dict
 from nltk.tokenize import WhitespaceTokenizer
 import h5py
+
+from enums.elmo_model import ELMoModel
 
 
 class MetaphorDataset(data.Dataset):
@@ -21,6 +20,7 @@ class MetaphorDataset(data.Dataset):
             self,
             filename: str,
             glove_vectors: Vectors,
+            elmo_model: ELMoModel,
             lowercase_sentences: bool = False,
             tokenize_sentences: bool = True,
             only_news: bool = False):
@@ -33,6 +33,7 @@ class MetaphorDataset(data.Dataset):
         self.lowercase_sentences = lowercase_sentences
         self.tokenize_sentences = tokenize_sentences
         self.only_news = only_news
+        self.elmo_model = elmo_model
 
         self._sentences, self._labels = self._parse_csv_file(filename)
 
@@ -93,7 +94,7 @@ class MetaphorDataset(data.Dataset):
         with open(filename, 'r') as csv_file:
             next(csv_file)  # skip the first line - headers
             csv_reader = csv.reader(csv_file, delimiter=',')
-            for row in csv_reader:
+            for _, row in enumerate(csv_reader):
                 if self.only_news:
                     genre = row[6]
                     if genre != 'news':
@@ -144,7 +145,10 @@ class MetaphorDataset(data.Dataset):
         Creates a file suffix which includes all current configuration options
         '''
 
-        file_suffix = '_elmo'
+        if self.elmo_model == ELMoModel.Original:
+            file_suffix = '_elmo'
+        elif self.elmo_model == ELMoModel.Small:
+            file_suffix = '_elmo_small'
 
         if self.only_news:
             file_suffix = f'_only_news{file_suffix}'
