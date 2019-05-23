@@ -7,7 +7,7 @@ import math
 
 class SentenceEncoder(nn.Module):
 
-    def __init__(self, embedding_dim, hidden_dim, num_layers, dropout_rate, device):
+    def __init__(self, embedding_dim, hidden_dim, num_layers, dropout_rate, device, skip_connection):
         super(SentenceEncoder, self).__init__()
 
         self.embedding_dim = embedding_dim
@@ -25,6 +25,7 @@ class SentenceEncoder(nn.Module):
         self.metaphor_fc = nn.Sequential(nn.Linear(2 * hidden_dim, 1),
                                          nn.Sigmoid())
         self.device = device
+        self.skip_connection = skip_connection
 
     def forward(self, x, len_x, task: TrainingMode):
         if task == TrainingMode.Hyperpartisan:
@@ -40,7 +41,8 @@ class SentenceEncoder(nn.Module):
         packed_seq = pack_padded_sequence(x, len_x, batch_first=True)
         out, _ = self.encoder(packed_seq)
         pad_packed_states, _ = pad_packed_sequence(out, batch_first=True)
-        pad_packed_states = torch.cat([pad_packed_states, x[:, :, :self.embedding_dim] ], dim=2)
+        if self.skip_connection:
+            pad_packed_states = torch.cat([pad_packed_states, x[:, :, :self.embedding_dim]], dim=2)
         pre_attn = self.pre_attn(pad_packed_states)
 
         # Masked attention

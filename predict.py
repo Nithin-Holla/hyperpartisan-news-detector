@@ -11,7 +11,9 @@ from enums.training_mode import TrainingMode
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 from helpers.hyperpartisan_loader import HyperpartisanLoader
 from model.JointModel import JointModel
-from train import load_glove_vectors
+from helpers.utils_helper import UtilsHelper
+
+utils_helper = UtilsHelper()
 
 
 def title_attention_plot(hyperpartisan_validation_dataset, model):
@@ -25,7 +27,7 @@ def title_attention_plot(hyperpartisan_validation_dataset, model):
 
     for idx, (
             article, article_target, article_recover_idx, article_num_sent, article_sent_lengths,
-            extra_feat) in enumerate(
+            extra_feat, _) in enumerate(
         hyperpartisan_validation_dataloader):
         model.eval()
         with torch.no_grad():
@@ -48,15 +50,7 @@ def title_attention_plot(hyperpartisan_validation_dataset, model):
     plt.show()
 
 
-def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id):
-    """
-    Generates a heatmap of the word-level and attention-level attention weights
-    :param hyperpartisan_validation_dataloader: Dataloader for hyperpartisan validation set
-    :param model: Trained model
-    :param article_id: ID of the article, i.e., the line number in valid_byart.txt
-    :return: None
-    """
-
+def get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id):
     # Load the CSV file
     article_df = pd.read_csv(os.path.join(hyperpartisan_dataset_folder, 'valid_byart.txt'), sep='\t',
                              converters={'title_tokens': literal_eval, 'body_tokens': literal_eval})
@@ -68,7 +62,7 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     # Load one article
     for idx, (
             article_vectors, article_target, article_recover_idx, article_num_sent, article_sent_lengths,
-            extra_feat) in enumerate(
+            extra_feat, _) in enumerate(
         hyperpartisan_validation_dataloader):
         if idx + 2 == article_id:
             break
@@ -84,6 +78,21 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     article_sent_lengths = article_sent_lengths[article_recover_idx]
     word_attn = np.around(word_attn.numpy(), decimals=4)
     sent_attn = np.around(sent_attn.numpy(), decimals=4)
+
+    return pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt
+
+
+def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id):
+    """
+    Generates a heatmap of the word-level and attention-level attention weights
+    :param hyperpartisan_validation_dataloader: Dataloader for hyperpartisan validation set
+    :param model: Trained model
+    :param article_id: ID of the article, i.e., the line number in valid_byart.txt
+    :return: None
+    """
+
+    pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(
+        hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id)
 
     # Display results
     print('Hyperpartisan score: {}'.format(pred))
@@ -118,28 +127,74 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     plt.show()
 
 
+def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader,
+                                       hyperpartisan_model, joint_model, article_id, sentence_id):
+    _, hyperpartisan_word_attn, _, _, _, _ = get_attention_weights(
+        hyperpartisan_dataset_folder,
+        hyperpartisan_validation_dataloader,
+        hyperpartisan_model,
+        article_id)
+
+    _, joint_word_attn, _, _, _, article_array = get_attention_weights(
+        hyperpartisan_dataset_folder,
+        hyperpartisan_validation_dataloader,
+        joint_model,
+        article_id)
+
+    sentence_labels = article_array[sentence_id]
+    subtracted_word_attention = joint_word_attn[sentence_id] - hyperpartisan_word_attn[sentence_id]
+
+    min_v = min(subtracted_word_attention)
+    range_v = max(subtracted_word_attention) - min_v
+    normalized_weights = (((subtracted_word_attention - min_v) / range_v)[:len(sentence_labels)])[np.newaxis, :]
+
+    sns.heatmap(normalized_weights, cmap='Blues', yticklabels=False, xticklabels=sentence_labels, cbar=False,
+                square=True)
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    plt.show()
+
+
 def predict(config):
     # Define the model
     total_embedding_dim = 1024 + 300
     device = torch.device('cpu')
+    hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
+                                     hidden_dim=config.hidden_dim,
+                                     num_layers=config.num_layers,
+                                     sent_encoder_dropout_rate=0,
+                                     doc_encoder_dropout_rate=0,
+                                     output_dropout_rate=0,
+                                     device=device,
+                                     skip_connection=config.skip_connection)
+
+    # Load the model if found
+    if os.path.isfile(config.hyperpartisan_model_checkpoint):
+        checkpoint = torch.load(config.hyperpartisan_model_checkpoint)
+        hyperpartisan_model.load_state_dict(checkpoint['model_state_dict'])
+        print('Loaded the model')
+    else:
+        raise Exception('Could not find the hyperpartisan model')
+
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=config.hidden_dim,
                              num_layers=config.num_layers,
                              sent_encoder_dropout_rate=0,
                              doc_encoder_dropout_rate=0,
                              output_dropout_rate=0,
-                             device=device)
+                             device=device,
+                             skip_connection=config.skip_connection)
 
     # Load the model if found
-    if os.path.isfile(config.model_file):
-        checkpoint = torch.load(config.model_file)
+    if os.path.isfile(config.joint_model_checkpoint):
+        checkpoint = torch.load(config.joint_model_checkpoint)
         joint_model.load_state_dict(checkpoint['model_state_dict'])
         print('Loaded the model')
     else:
-        print('Could not find the model')
+        raise Exception('Could not find the joint model')
 
     # Load GloVe vectors
-    glove_vectors = load_glove_vectors(config.vector_file_name, config.vector_cache_dir, config.glove_size)
+    glove_vectors = utils_helper.load_glove_vectors(config.vector_file_name, config.vector_cache_dir, config.glove_size)
 
     # Load the dataset and dataloader
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
@@ -153,15 +208,27 @@ def predict(config):
         batch_size=1,
         shuffle=False)
 
-    title_attention_plot(hyperpartisan_validation_dataset, joint_model)
-    visualize_article_attention(config.hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, joint_model,
-                                article_id=config.article_id)
+    if config.sentence_id:
+        show_sentence_attention_difference(
+            config.hyperpartisan_dataset_folder,
+            hyperpartisan_validation_dataloader,
+            hyperpartisan_model,
+            joint_model,
+            config.article_id,
+            config.sentence_id)
+    else:
+        title_attention_plot(hyperpartisan_validation_dataset, joint_model)
+        visualize_article_attention(config.hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader,
+                                    joint_model,
+                                    article_id=config.article_id)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_file', type=str, required=True,
-                        help='Path to save/load the model')
+    parser.add_argument('--hyperpartisan_model_checkpoint', type=str, required=True,
+                        help='Path to load the hyperpartisan model')
+    parser.add_argument('--joint_model_checkpoint', type=str, required=True,
+                        help='Path to load the joint model')
     parser.add_argument('--vector_file_name', type=str, required=True,
                         help='File in which vectors are saved')
     parser.add_argument('--article_id', type=int, required=True,
@@ -178,6 +245,12 @@ if __name__ == '__main__':
                         help='Path to the hyperpartisan dataset')
     parser.add_argument('--num_layers', type=int, default=1,
                         help='The number of layers in the biLSTM sentence encoder')
+    parser.add_argument('--sentence_id', type=int,
+                        help='The sentence id which will be used for calculating the difference')
+    parser.add_argument('--skip_connection', action='store_true',
+                        help='Indicates whether a skip connection is to be used in the sentence encoder '
+                             'while training on hyperpartisan task')
+
     config = parser.parse_args()
 
     predict(config)

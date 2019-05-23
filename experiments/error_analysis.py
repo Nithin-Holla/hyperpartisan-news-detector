@@ -50,7 +50,8 @@ def initialize_models(
                                      sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
                                      doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                                      output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
-                                     device=device).to(device)
+                                     device=device,
+                                     skip_connection=Constants.DEFAULT_SKIP_CONNECTION).to(device)
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
@@ -58,7 +59,8 @@ def initialize_models(
                              sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
                              doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                              output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
-                             device=device).to(device)
+                             device=device,
+                             skip_connection=Constants.DEFAULT_SKIP_CONNECTION).to(device)
 
     load_model_state(hyperpartisan_model, hyperpartisan_model_checkpoint_path)
     load_model_state(joint_model, joint_model_checkpoint_path)
@@ -72,7 +74,15 @@ def get_interesting_articles(targets, hyp_pred, joint_pred):
     assert len(targets) == len(hyp_pred)
     assert len(targets) == len(joint_pred)
 
-    interesting_articles = np.where(targets == 1 and hyp_pred == 0 and joint_pred == 1)
+    interesting_articles = np.where(targets == 1 and hyp_pred == 0 and joint_pred == 1)[0]
+
+    print('[', end='')
+    for i in range(len(targets)):
+        if targets[i] == 1 and hyp_pred[i] == 0 and joint_pred[i] == 1:
+            print(f'{i},', end='')
+            
+            # print(f'{targets[i]} - {hyp_pred[i]} - {joint_pred[i]}')
+    print(']')
 
     return interesting_articles
 
