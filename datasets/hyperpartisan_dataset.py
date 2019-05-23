@@ -145,7 +145,7 @@ class HyperpartisanDataset(data.Dataset):
 
 			for _, row in enumerate(csv_reader):
 
-				ids.append(int(row[0]))
+				ids.append(row[0])
 				
 				date = row[1]
 				try:
