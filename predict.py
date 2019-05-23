@@ -160,9 +160,12 @@ def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartis
 def predict(config):
     # Define the model
     if config.elmo_model == ELMoModel.Original:
-        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION + 300
+        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION
     elif config.elmo_model == ELMoModel.Small:
-        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION + 300
+        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION
+
+    if config.concat_glove:
+        total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
 
     device = torch.device('cpu')
     hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
@@ -200,11 +203,15 @@ def predict(config):
         raise Exception('Could not find the joint model')
 
     # Load GloVe vectors
-    glove_vectors = utils_helper.load_glove_vectors(config.vector_file_name, config.vector_cache_dir, config.glove_size)
+    if config.concat_glove:
+        glove_vectors = utils_helper.load_glove_vectors(config.vector_file_name, config.vector_cache_dir, config.glove_size)
+    else:
+        glove_vectors = None
 
     # Load the dataset and dataloader
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
+        concat_glove=config.concat_glove,
         glove_vectors=glove_vectors,
         elmo_model=config.elmo_model,
         lowercase_sentences=config.lowercase)
@@ -259,6 +266,8 @@ if __name__ == '__main__':
                              'while training on hyperpartisan task')
     parser.add_argument('--elmo_model', type=ELMoModel, choices=list(ELMoModel), default=ELMoModel.Original,
                         help='ELMo model from which vectors are used')
+    parser.add_argument('--concat_glove', action='store_true',
+                        help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
 
     config = parser.parse_args()
 

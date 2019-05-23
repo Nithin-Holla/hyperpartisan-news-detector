@@ -7,10 +7,7 @@ from torchtext.vocab import Vectors
 
 import os
 
-from datasets.hyperpartisan_dataset import HyperpartisanDataset
-from datasets.metaphor_dataset import MetaphorDataset
 from enums.elmo_model import ELMoModel
-
 from helpers.hyperpartisan_loader import HyperpartisanLoader
 from helpers.metaphor_loader import MetaphorLoader
 
@@ -34,15 +31,17 @@ utils_helper = UtilsHelper()
 
 def initialize_model(
         argument_parser: ArgumentParserHelper,
-        device: torch.device,
-        glove_vectors_dim: int):
+        device: torch.device):
 
     print('Loading model state...\r', end='')
 
     if argument_parser.elmo_model == ELMoModel.Original:
-        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
+        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION
     elif argument_parser.elmo_model == ELMoModel.Small:
-        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
+        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION
+
+    if argument_parser.concat_glove:
+        total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=argument_parser.hidden_dim,
@@ -81,6 +80,7 @@ def create_hyperpartisan_loaders(
 
     hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=argument_parser.hyperpartisan_dataset_folder,
+        concat_glove=argument_parser.concat_glove,
         glove_vectors=glove_vectors,
         elmo_model=argument_parser.elmo_model,
         lowercase_sentences=argument_parser.lowercase,
@@ -101,6 +101,7 @@ def create_metaphor_loaders(
 
     metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
         metaphor_dataset_folder=argument_parser.metaphor_dataset_folder,
+        concat_glove=argument_parser.concat_glove,
         glove_vectors=glove_vectors,
         elmo_model=argument_parser.elmo_model,
         lowercase_sentences=argument_parser.lowercase,
@@ -582,12 +583,14 @@ def train_model(argument_parser: ArgumentParserHelper):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = utils_helper.load_glove_vectors(
-        argument_parser.vector_file_name, argument_parser.vector_cache_dir, argument_parser.glove_size)
+    if argument_parser.concat_glove:
+        glove_vectors = utils_helper.load_glove_vectors(
+            argument_parser.vector_file_name, argument_parser.vector_cache_dir, argument_parser.glove_size)
+    else:
+        glove_vectors = None
 
     # Define the model, the optimizer and the loss module
-    joint_model, optimizer, start_epoch = initialize_model(
-        argument_parser, device, glove_vectors.dim)
+    joint_model, optimizer, start_epoch = initialize_model(argument_parser, device)
 
     summary_writer = SummaryWriter(
         f'runs/exp-{argument_parser.mode}-odr_{argument_parser.output_dropout_rate}-lr_{argument_parser.learning_rate}-wd_{argument_parser.weight_decay}-lsf_{argument_parser.loss_suppress_factor}')

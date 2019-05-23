@@ -27,13 +27,14 @@ def load_glove_vectors(argument_parser):
     return glove_vectors
 
 
-def initialize_model(argument_parser, device, glove_vectors_dim=300):
+def initialize_model(argument_parser, device):
     if argument_parser.elmo_model == ELMoModel.Original:
         elmo_vectors_size = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION
     elif argument_parser.elmo_model == ELMoModel.Small:
         elmo_vectors_size = Constants.SMALL_ELMO_EMBEDDING_DIMENSION
 
-    total_embedding_dim = elmo_vectors_size + glove_vectors_dim
+    if argument_parser.concat_glove:
+        total_embedding_dim = elmo_vectors_size + Constants.GLOVE_EMBEDDING_DIMENSION
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=argument_parser.hidden_dim,
@@ -51,7 +52,10 @@ def initialize_model(argument_parser, device, glove_vectors_dim=300):
 
 
 def create_hyperpartisan_loaders(argument_parser, glove_vectors):
-    hyperpartisan_test_dataset = HyperpartisanDataset(argument_parser.txt_file, glove_vectors, argument_parser.elmo_model)
+    hyperpartisan_test_dataset = HyperpartisanDataset(argument_parser.txt_file,
+                                                      argument_parser.concat_glove,
+                                                      glove_vectors,
+                                                      argument_parser.elmo_model)
 
     _, _, hyperpartisan_test_dataloader = DataHelperHyperpartisan.create_dataloaders(
         train_dataset=None,
@@ -156,10 +160,13 @@ def eval_model(argument_parser):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = load_glove_vectors(argument_parser)
+    if argument_parser.concat_glove:
+        glove_vectors = load_glove_vectors(argument_parser)
+    else:
+        glove_vectors = None
 
     # Load pre-trained model
-    joint_model = initialize_model(argument_parser, device, glove_vectors.dim)
+    joint_model = initialize_model(argument_parser, device)
 
     # initialize test set loader
     hyperpartisan_test_dataloader = create_hyperpartisan_loaders(argument_parser, glove_vectors)
@@ -220,6 +227,8 @@ if __name__ == '__main__':
                              'while training on hyperpartisan task')
     parser.add_argument('--elmo_model', type=ELMoModel, choices=list(ELMoModel), default=ELMoModel.Original,
                         help='ELMo model from which vectors are used')
+    parser.add_argument('--concat_glove', action='store_true',
+                        help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
 
     argument_parser = parser.parse_args()
 

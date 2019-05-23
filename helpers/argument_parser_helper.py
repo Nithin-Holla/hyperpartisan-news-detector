@@ -65,7 +65,8 @@ class ArgumentParserHelper():
                                  'while training on hyperpartisan task')
         parser.add_argument('--elmo_model', type=ELMoModel, choices=list(ELMoModel), default=ELMoModel.Original,
                             help='ELMo model from which vectors are used')
-
+        parser.add_argument('--concat_glove', action='store_true',
+                            help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
         config = parser.parse_args()
 
         self._load_config(config)
@@ -99,6 +100,7 @@ class ArgumentParserHelper():
         self._num_layers: int = config.num_layers
         self._skip_connection: bool = config.skip_connection
         self._elmo_model: ELMoModel = config.elmo_model
+        self._concat_glove: bool = config.concat_glove
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -121,7 +123,8 @@ class ArgumentParserHelper():
               f'hyperpartisan_max_length: {self._hyperpartisan_max_length}\n' +
               f'num_layers: {self._num_layers}\n' +
               f'skip_connection: {self._skip_connection}\n' +
-              f'elmo_model: {self._elmo_model}\n')
+              f'elmo_model: {self._elmo_model}\n' +
+              f'concat_glove: {self._concat_glove}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -234,3 +237,7 @@ class ArgumentParserHelper():
     @property
     def elmo_model(self) -> ELMoModel:
         return self._elmo_model
+
+    @property
+    def concat_glove(self) -> bool:
+        return self._concat_glove

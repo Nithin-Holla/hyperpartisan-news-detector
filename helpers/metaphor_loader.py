@@ -14,6 +14,7 @@ class MetaphorLoader():
     @staticmethod
     def get_metaphor_datasets(
             metaphor_dataset_folder: str,
+            concat_glove: bool,
             glove_vectors: Vectors,
             elmo_model: ELMoModel,
             lowercase_sentences: bool = False,
@@ -24,6 +25,7 @@ class MetaphorLoader():
         include information about the vocabulary and the embedding of the sentences
 
         :param str metaphor_dataset_folder: The folder where the metaphor dataset files should be
+        :param bool concat_glove: Whether GloVe vectors have to be concatenated with ELMo vectors for words
         :param Vectors glove_vectors: The vector that will be used to embed the words in the metaphor dataset. It could be GloVe for example
         :param ELMoModel elmo_model: The ELMo from which vectors are used
         :param bool lowercase_sentences: Specify whether the sentences should be lowercased before embedding them
@@ -40,6 +42,7 @@ class MetaphorLoader():
 
         train_dataset = MetaphorDataset(
             filename=train_filepath,
+            concat_glove=concat_glove,
             glove_vectors=glove_vectors,
             elmo_model=elmo_model,
             lowercase_sentences=lowercase_sentences,
@@ -52,6 +55,7 @@ class MetaphorLoader():
 
         validation_dataset = MetaphorDataset(
             filename=validation_filepath,
+            concat_glove=concat_glove,
             glove_vectors=glove_vectors,
             elmo_model=elmo_model,
             lowercase_sentences=lowercase_sentences,
@@ -64,6 +68,7 @@ class MetaphorLoader():
 
         test_dataset = MetaphorDataset(
             filename=test_filepath,
+            concat_glove=concat_glove,
             glove_vectors=glove_vectors,
             elmo_model=elmo_model,
             lowercase_sentences=lowercase_sentences,

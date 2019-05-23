@@ -1,11 +1,7 @@
 import os
-import numpy as np
-
 from torchtext.vocab import Vectors
-
 import torch.utils.data as data
 import torch
-
 import csv
 import ast
 from typing import List, Tuple, Dict
@@ -19,6 +15,7 @@ class MetaphorDataset(data.Dataset):
     def __init__(
             self,
             filename: str,
+            concat_glove: bool,
             glove_vectors: Vectors,
             elmo_model: ELMoModel,
             lowercase_sentences: bool = False,
@@ -28,6 +25,7 @@ class MetaphorDataset(data.Dataset):
         assert os.path.splitext(
             filename)[1] == '.csv', 'Metaphor dataset file should be of type CSV'
 
+        self.concat_glove = concat_glove
         self.glove_vectors = glove_vectors
         self.tokenizer = WhitespaceTokenizer()
         self.lowercase_sentences = lowercase_sentences
@@ -55,17 +53,21 @@ class MetaphorDataset(data.Dataset):
 
         sentence_length = len(words)
 
-        # get the GloVe embedding. If it's missing for this word - try lowercasing it
-        words_embeddings = [
-            self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in words]
-
-        glove_embeddings = torch.stack(words_embeddings)
         elmo_embedding_file = h5py.File(self.elmo_filename, 'r')
         elmo_embeddings = torch.Tensor(elmo_embedding_file[str(idx)])
 
-        # elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
-        combined_embeddings = torch.cat(
-            [elmo_embeddings, glove_embeddings], dim=1)
+        if self.concat_glove:
+            # get the GloVe embedding. If it's missing for this word - try lowercasing it
+            words_embeddings = [
+                self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in words]
+
+            glove_embeddings = torch.stack(words_embeddings)
+
+            # elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
+            combined_embeddings = torch.cat(
+                [elmo_embeddings, glove_embeddings], dim=1)
+        else:
+            combined_embeddings = elmo_embeddings
 
         elmo_embedding_file.close()
 
