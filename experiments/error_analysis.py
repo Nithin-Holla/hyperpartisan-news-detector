@@ -50,7 +50,8 @@ def initialize_models(
                                      sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
                                      doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                                      output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
-                                     device=device).to(device)
+                                     device=device,
+                                     skip_connection=Constants.DEFAULT_SKIP_CONNECTION).to(device)
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
@@ -58,7 +59,8 @@ def initialize_models(
                              sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
                              doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                              output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
-                             device=device).to(device)
+                             device=device,
+                             skip_connection=Constants.DEFAULT_SKIP_CONNECTION).to(device)
 
     load_model_state(hyperpartisan_model, hyperpartisan_model_checkpoint_path)
     load_model_state(joint_model, joint_model_checkpoint_path)

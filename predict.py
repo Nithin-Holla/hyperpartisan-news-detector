@@ -15,6 +15,7 @@ from helpers.utils_helper import UtilsHelper
 
 utils_helper = UtilsHelper()
 
+
 def title_attention_plot(hyperpartisan_validation_dataset, model):
     _, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         validation_dataset=hyperpartisan_validation_dataset,
@@ -48,6 +49,7 @@ def title_attention_plot(hyperpartisan_validation_dataset, model):
     sns.heatmap(attn_summary, square=True, annot=True, cmap='Blues', cbar=False)
     plt.show()
 
+
 def get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id):
     # Load the CSV file
     article_df = pd.read_csv(os.path.join(hyperpartisan_dataset_folder, 'valid_byart.txt'), sep='\t',
@@ -76,8 +78,9 @@ def get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation
     article_sent_lengths = article_sent_lengths[article_recover_idx]
     word_attn = np.around(word_attn.numpy(), decimals=4)
     sent_attn = np.around(sent_attn.numpy(), decimals=4)
-    
+
     return pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt
+
 
 def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id):
     """
@@ -88,7 +91,8 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     :return: None
     """
 
-    pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id)
+    pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(
+        hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id)
 
     # Display results
     print('Hyperpartisan score: {}'.format(pred))
@@ -122,14 +126,16 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
         plt.text(x_loc, y_loc, article_txt[i], bbox={'facecolor': attn_colors[i], 'linewidth': 0})
     plt.show()
 
-def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, hyperpartisan_model, joint_model, article_id, sentence_id):
-    _, hyperpartisan_word_attn, _, _, _, _ =  get_attention_weights(
+
+def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader,
+                                       hyperpartisan_model, joint_model, article_id, sentence_id):
+    _, hyperpartisan_word_attn, _, _, _, _ = get_attention_weights(
         hyperpartisan_dataset_folder,
         hyperpartisan_validation_dataloader,
         hyperpartisan_model,
         article_id)
-        
-    _, joint_word_attn, _, _, _, article_array =  get_attention_weights(
+
+    _, joint_word_attn, _, _, _, article_array = get_attention_weights(
         hyperpartisan_dataset_folder,
         hyperpartisan_validation_dataloader,
         joint_model,
@@ -137,27 +143,30 @@ def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartis
 
     sentence_labels = article_array[sentence_id]
     subtracted_word_attention = joint_word_attn[sentence_id] - hyperpartisan_word_attn[sentence_id]
-    
+
     min_v = min(subtracted_word_attention)
     range_v = max(subtracted_word_attention) - min_v
     normalized_weights = (((subtracted_word_attention - min_v) / range_v)[:len(sentence_labels)])[np.newaxis, :]
 
-    sns.heatmap(normalized_weights, cmap='Blues', yticklabels=False, xticklabels=sentence_labels, cbar=False, square=True)
+    sns.heatmap(normalized_weights, cmap='Blues', yticklabels=False, xticklabels=sentence_labels, cbar=False,
+                square=True)
     plt.xticks(rotation=90)
     plt.tight_layout()
     plt.show()
+
 
 def predict(config):
     # Define the model
     total_embedding_dim = 1024 + 300
     device = torch.device('cpu')
     hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
-                             hidden_dim=config.hidden_dim,
-                             num_layers=config.num_layers,
-                             sent_encoder_dropout_rate=0,
-                             doc_encoder_dropout_rate=0,
-                             output_dropout_rate=0,
-                             device=device)
+                                     hidden_dim=config.hidden_dim,
+                                     num_layers=config.num_layers,
+                                     sent_encoder_dropout_rate=0,
+                                     doc_encoder_dropout_rate=0,
+                                     output_dropout_rate=0,
+                                     device=device,
+                                     skip_connection=config.skip_connection)
 
     # Load the model if found
     if os.path.isfile(config.hyperpartisan_model_checkpoint):
@@ -173,7 +182,8 @@ def predict(config):
                              sent_encoder_dropout_rate=0,
                              doc_encoder_dropout_rate=0,
                              output_dropout_rate=0,
-                             device=device)
+                             device=device,
+                             skip_connection=config.skip_connection)
 
     # Load the model if found
     if os.path.isfile(config.joint_model_checkpoint):
@@ -200,7 +210,7 @@ def predict(config):
 
     if config.sentence_id:
         show_sentence_attention_difference(
-            config.hyperpartisan_dataset_folder, 
+            config.hyperpartisan_dataset_folder,
             hyperpartisan_validation_dataloader,
             hyperpartisan_model,
             joint_model,
@@ -208,9 +218,9 @@ def predict(config):
             config.sentence_id)
     else:
         title_attention_plot(hyperpartisan_validation_dataset, joint_model)
-        visualize_article_attention(config.hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, joint_model,
+        visualize_article_attention(config.hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader,
+                                    joint_model,
                                     article_id=config.article_id)
-
 
 
 if __name__ == '__main__':
@@ -237,6 +247,10 @@ if __name__ == '__main__':
                         help='The number of layers in the biLSTM sentence encoder')
     parser.add_argument('--sentence_id', type=int,
                         help='The sentence id which will be used for calculating the difference')
+    parser.add_argument('--skip_connection', action='store_true',
+                        help='Indicates whether a skip connection is to be used in the sentence encoder '
+                             'while training on hyperpartisan task')
+
     config = parser.parse_args()
 
     predict(config)

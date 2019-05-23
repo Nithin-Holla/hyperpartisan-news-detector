@@ -59,6 +59,9 @@ class ArgumentParserHelper():
                             help='The length after which the hyperpartisan articles will be cut off')
         parser.add_argument('--num_layers', type=int, default=Constants.DEFAULT_NUM_LAYERS,
                             help='The number of layers in the biLSTM sentence encoder')
+        parser.add_argument('--skip_connection', action='store_true',
+                            help='Indicates whether a skip connection is to be used in the sentence encoder '
+                                 'while training on hyperpartisan task')
 
         config = parser.parse_args()
 
@@ -91,6 +94,7 @@ class ArgumentParserHelper():
         self._loss_suppress_factor: float = config.loss_suppress_factor
         self._hyperpartisan_max_length: int = config.hyperpartisan_max_length
         self._num_layers: int = config.num_layers
+        self._skip_connection: bool = config.skip_connection
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -111,7 +115,8 @@ class ArgumentParserHelper():
               f'output_dropout_rate: {self._output_dropout_rate}\n' +
               f'loss_suppress_factor: {self._loss_suppress_factor}\n' +
               f'hyperpartisan_max_length: {self._hyperpartisan_max_length}\n' +
-              f'num_layers: {self._num_layers}\n')
+              f'num_layers: {self._num_layers}\n' +
+              f'skip_connection: {self._skip_connection}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -216,4 +221,7 @@ class ArgumentParserHelper():
     @property
     def num_layers(self) -> int:
         return self._num_layers
-    
+
+    @property
+    def skip_connection(self) -> bool:
+        return self._skip_connection
