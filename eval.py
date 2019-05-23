@@ -73,7 +73,8 @@ def iterate_hyperpartisan(
 	predictions = joint_model.forward(batch_inputs, (batch_recover_idx,
 													 batch_num_sent, batch_sent_lengths, batch_feat), task=TrainingMode.Hyperpartisan)
 
-	return predictions.round().long().tolist()
+	# return predictions.round().long().tolist()
+	return predictions.tolist()
 
 def iterate_metaphor(joint_model, metaphor_data, device):
 
@@ -85,9 +86,9 @@ def iterate_metaphor(joint_model, metaphor_data, device):
 	predictions = predictions.tolist()
 
 	metaphorical = []
-	for sent in predictions:
-		sent = [p[0] for p in sent]
-		metaphorical.append(sum(sent)/len(sent))
+	for i, sent in enumerate(predictions):
+		sent = [int(p[0] > 0.5) for p in sent[:batch_lengths[i].item()]]
+		metaphorical.append(int(sum(sent) > 1))
 	metaphorical = sum(metaphorical)/len(metaphorical)
 
 	return metaphorical
@@ -157,9 +158,12 @@ def eval_model(argument_parser):
 		with torch.no_grad():
 			predictions, ids = forward_full_hyperpartisan(joint_model, hyperpartisan_test_dataloader, device)
 
-		with open("output.txt", "w") as f:
-			for Id, prediction in zip(ids, predictions):
-				f.write(Id + " " + str(prediction == 1) + "\n")
+		# with open("output_hyper.txt", "w") as f:
+		# 	for Id, prediction in zip(ids, predictions):
+		# 		f.write(Id + " " + str(prediction == 1) + "\n")
+		with open("prob_joint.txt", "w") as f:
+			for Id, prob in zip(ids, predictions):
+				f.write(Id + " " + str(prob) + "\n")
 
 	elif argument_parser.mode == "metaphorical":
 
