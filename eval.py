@@ -62,7 +62,8 @@ def iterate_hyperpartisan(
         batch_num_sent,
         batch_sent_lengths,
         batch_feat,
-        device):
+        device,
+        output):
     batch_inputs = batch_inputs.to(device)
     batch_recover_idx = batch_recover_idx.to(device)
     batch_num_sent = batch_num_sent.to(device)
@@ -73,10 +74,11 @@ def iterate_hyperpartisan(
                                                      batch_num_sent, batch_sent_lengths, batch_feat),
                                       task=TrainingMode.Hyperpartisan)
 
-    return predictions.round().long().tolist()
 
-	# return predictions.round().long().tolist()
-	return predictions.tolist()
+    if output == "predictions":
+    	return predictions.round().long().tolist()
+    else:
+    	return predictions.tolist()
 
 def iterate_metaphor(joint_model, metaphor_data, device):
     batch_inputs = metaphor_data[0].to(device).float()
@@ -92,17 +94,21 @@ def iterate_metaphor(joint_model, metaphor_data, device):
         metaphorical.append(sum(sent) / len(sent))
     metaphorical = sum(metaphorical) / len(metaphorical)
 
-	metaphorical = []
-	for i, sent in enumerate(predictions):
-		sent = [int(p[0] > 0.5) for p in sent[:batch_lengths[i].item()]]
-		metaphorical.append(int(sum(sent) > 1))
-	metaphorical = sum(metaphorical)/len(metaphorical)
+	# metaphorical = []
+	# for i, sent in enumerate(predictions):
+	# 	sent = [int(p[0] > 0.5) for p in sent[:batch_lengths[i].item()]]
+	# 	metaphorical.append(int(sum(sent) > 1))
+	# metaphorical = sum(metaphorical)/len(metaphorical)
+
+    return metaphorical
 
 
 def forward_full_hyperpartisan(
         joint_model: JointModel,
         dataloader: DataLoader,
-        device: torch.device):
+        device: torch.device, 
+        output):
+
     all_predictions = []
     all_ids = []
 
@@ -116,7 +122,8 @@ def forward_full_hyperpartisan(
             batch_num_sent=batch_num_sent,
             batch_sent_lengths=batch_sent_lengths,
             batch_feat=batch_feat,
-            device=device)
+            device=device,
+            output=output)
 
         print(batch_ids[0], batch_predictions[0])
 
@@ -161,18 +168,18 @@ def eval_model(argument_parser):
     if argument_parser.mode == "normal":
 
         with torch.no_grad():
-            predictions, ids = forward_full_hyperpartisan(joint_model, hyperpartisan_test_dataloader, device)
+            predictions, ids = forward_full_hyperpartisan(joint_model, hyperpartisan_test_dataloader, device, argument_parser.output)
 
-        with open("output.txt", "w") as f:
-            for Id, prediction in zip(ids, predictions):
-                f.write(Id + " " + str(prediction == 1) + "\n")
+        if argument_parser.output == "predictions":
+            with open("pred_joint.txt", "w") as f:
+                for Id, prediction in zip(ids, predictions):
+                    f.write(Id + " " + str(prediction == 1) + "\n")
+        else:
+    		with open("prob_joint.txt", "w") as f:
+    			for Id, prob in zip(ids, predictions):
+    				f.write(Id + " " + str(prob) + "\n")
 
-		# with open("output_hyper.txt", "w") as f:
-		# 	for Id, prediction in zip(ids, predictions):
-		# 		f.write(Id + " " + str(prediction == 1) + "\n")
-		with open("prob_joint.txt", "w") as f:
-			for Id, prob in zip(ids, predictions):
-				f.write(Id + " " + str(prob) + "\n")
+    else:
 
         with torch.no_grad():
             metaphorical, ids = forward_through_metaphor(joint_model, hyperpartisan_test_dataloader, device)
@@ -210,6 +217,8 @@ if __name__ == '__main__':
     parser.add_argument('--skip_connection', action='store_true',
                         help='Indicates whether a skip connection is to be used in the sentence encoder '
                              'while training on hyperpartisan task')
+    parser.add_argument('--output', type=str, choices = ["predictions", "probabilities"], default = "predictions",
+                        help = "whether to return the predictions or the probabilities of the instances")
 
     argument_parser = parser.parse_args()
 
