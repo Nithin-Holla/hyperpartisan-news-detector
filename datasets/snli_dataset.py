@@ -10,11 +10,11 @@ from ast import literal_eval
 import h5py
 
 class SnliDataset(data.Dataset):
-	def __init__(self, filename: str, glove_vectors: Vectors):
+	def __init__(self, filename: str, glove_vectors: Vectors, use_data: int):
 
 		self.glove_vectors = glove_vectors
 
-		self._sentences1, self._sentences2, self._labels, self._ntokens1, self._ntokens2 = self._parse_csv_file(filename)
+		self._sentences1, self._sentences2, self._labels, self._ntokens1, self._ntokens2 = self._parse_csv_file(filename, use_data)
 
 		self.elmo_filename1 = filename.split(".")[0] + "_1_elmo.txt"
 		self.elmo_filename2 = filename.split(".")[0] + "_2_elmo.txt"
@@ -58,6 +58,6 @@ class SnliDataset(data.Dataset):
 
 		dtype = {"label": int, "ntokens1": int, "ntokens2": int}
 		converters = {"sentence1": literal_eval, "sentence2": literal_eval}
-		df = pd.read_csv(filename, index_col = 0, sep = "\t", dtype = dtype, converters = converters)
+		df = pd.read_csv(filename, index_col = 0, sep = "\t", dtype = dtype, converters = converters, nrows = use_data)
 
 		return df.sentence1.tolist(), df.sentence2.tolist(), df.label.tolist(), df.ntokens1.tolist(), df.ntokens2.tolist()

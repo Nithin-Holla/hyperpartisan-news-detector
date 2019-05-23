@@ -54,7 +54,7 @@ def initialize_model(argument_parser, device, glove_vectors_dim):
 
 def create_loaders(argument_parser, glove_vectors):
 
-	train_dataset, validation_dataset, test_dataset = SnliLoader.get_snli_datasets(snli_dataset_folder, glove_vectors)
+	train_dataset, validation_dataset, test_dataset = SnliLoader.get_snli_datasets(snli_dataset_folder, glove_vectors, argument_parser)
 
 	train_dataloader, validation_dataloader, test_dataloader = DataHelperSnli.create_dataloaders(
 		train_dataset, validation_dataset, test_dataset, argument_parser.batch_size, shuffle=True)
@@ -242,6 +242,9 @@ if __name__ == '__main__':
     parser.add_argument('--sent_encoder_dropout_rate', type=float, default=0.)
     parser.add_argument('--num_layers', type=int, default=Constants.DEFAULT_NUM_LAYERS)
     parser.add_argument('--skip_connection', action='store_true', default=Constants.DEFAULT_SKIP_CONNECTION)
+    parser.add_argument('--use_data_train', type=int, default = 6400)
+    parser.add_argument('--use_data_valid', type=int, default = 640)
+    parser.add_argument('--use_data_test', type=int, default = 640)
     argument_parser = parser.parse_args()
 
 	train_model(argument_parser)
