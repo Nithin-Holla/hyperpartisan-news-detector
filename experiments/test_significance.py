@@ -12,6 +12,9 @@ from torch.utils.data import DataLoader
 import numpy as np
 
 import sys
+
+from enums.elmo_model import ELMoModel
+
 sys.path.append('..')
 
 from model.JointModel import JointModel
@@ -39,11 +42,20 @@ def initialize_models(
         hyperpartisan_model_checkpoint_path: str,
         joint_model_checkpoint_path: str,
         device: torch.device,
+        elmo_model: ELMoModel,
+        concat_glove: bool,
         glove_vectors_dim: int):
 
     print('Loading model state...\r', end='')
 
-    total_embedding_dim = Constants.DEFAULT_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
+    if elmo_model == ELMoModel.Original:
+        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION
+    elif elmo_model == ELMoModel.Small:
+        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION
+
+    if concat_glove:
+        total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
+
 
     hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
                                      hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
@@ -142,6 +154,10 @@ if __name__ == '__main__':
                         help='The seed to be used when running deterministically. If nothing is passed, the program run will be stochastic')
     parser.add_argument('--alpha_value', type=int, default=0.05,
                         help='The alpha value which will be used to statistically test the significant difference')
+    parser.add_argument('--elmo_model', type=ELMoModel, choices=list(ELMoModel), default=ELMoModel.Original,
+                        help='ELMo model from which vectors are used')
+    parser.add_argument('--concat_glove', action='store_true',
+                        help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
 
     config = parser.parse_args()
 
@@ -149,14 +165,24 @@ if __name__ == '__main__':
 
     device = torch.device("cuda:0")# if torch.cuda.is_available() else "cpu")
 
-    glove_vectors = utils_helper.load_glove_vectors(
-        config.vector_file_name, config.vector_cache_dir, config.glove_size)
+    if config.concat_glove:
+        glove_vectors = utils_helper.load_glove_vectors(
+            config.vector_file_name, config.vector_cache_dir, config.glove_size)
+    else:
+        glove_vectors = None
 
-    hyperpartisan_model, joint_model = initialize_models(config.hyperpartisan_model_checkpoint, config.joint_model_checkpoint, device, glove_vectors.dim)
+    hyperpartisan_model, joint_model = initialize_models(config.hyperpartisan_model_checkpoint,
+                                                         config.joint_model_checkpoint,
+                                                         device,
+                                                         config.elmo_model,
+                                                         config.concat_glove,
+                                                         glove_vectors.dim)
     
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
+        concat_glove=config.concat_glove,
         glove_vectors=glove_vectors,
+        elmo_model=config.elmo_model,
         lowercase_sentences=False,
         articles_max_length=Constants.DEFAULT_HYPERPARTISAN_MAX_LENGTH,
         load_train=False)

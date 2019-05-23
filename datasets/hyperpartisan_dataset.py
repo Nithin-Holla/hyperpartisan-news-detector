@@ -1,19 +1,18 @@
-import torchtext
 import os
 import numpy as np
 
 from torchtext.vocab import Vectors
 
-from torch.autograd import Variable
 import torch.utils.data as data
 import torch
-import torch.nn as nn
 from ast import literal_eval
 
 import csv
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple
 
 import h5py
+
+from enums.elmo_model import ELMoModel
 
 
 class HyperpartisanDataset(data.Dataset):
@@ -21,11 +20,15 @@ class HyperpartisanDataset(data.Dataset):
 	def __init__(
 			self,
 			filename: str,
+			concat_glove: bool,
 			glove_vectors: Vectors,
+            elmo_model: ELMoModel,
 			lowercase_sentences: bool = False,
             articles_max_length: int = None):
 
+		self.concat_glove = concat_glove
 		self.glove_vectors = glove_vectors
+		self.elmo_model = elmo_model
 		self.lowercase_sentences = lowercase_sentences
 		self.articles_max_length = articles_max_length
 
@@ -60,23 +63,24 @@ class HyperpartisanDataset(data.Dataset):
 			title_tokens = [token.lower() for token in title_tokens]
 			body_tokens = [token.lower() for token in sentence_tokens for sentence_tokens in title_tokens]
 
-		title_glove_embeddings = torch.stack(
-			[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in title_tokens])
+		if self.concat_glove:
+			title_glove_embeddings = torch.stack(
+				[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in title_tokens])
 
-		body_glove_embeddings = []
-		current_tokens_amount = len(title_tokens)
-		for sentence_tokens in body_tokens:
-			if self.articles_max_length and current_tokens_amount >= self.articles_max_length:
-				break
-			elif self.articles_max_length and current_tokens_amount + len(sentence_tokens) > self.articles_max_length:
-				sentence_tokens = sentence_tokens[0:(self.articles_max_length - current_tokens_amount)]
+			body_glove_embeddings = []
+			current_tokens_amount = len(title_tokens)
+			for sentence_tokens in body_tokens:
+				if self.articles_max_length and current_tokens_amount >= self.articles_max_length:
+					break
+				elif self.articles_max_length and current_tokens_amount + len(sentence_tokens) > self.articles_max_length:
+					sentence_tokens = sentence_tokens[0:(self.articles_max_length - current_tokens_amount)]
 
-			current_tokens_amount += len(sentence_tokens)
-			sentence_glove_embeddings = torch.stack(
-				[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in sentence_tokens])
-			body_glove_embeddings.append(sentence_glove_embeddings)
+				current_tokens_amount += len(sentence_tokens)
+				sentence_glove_embeddings = torch.stack(
+					[self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in sentence_tokens])
+				body_glove_embeddings.append(sentence_glove_embeddings)
 
-		glove_embeddings = [title_glove_embeddings] + body_glove_embeddings
+			glove_embeddings = [title_glove_embeddings] + body_glove_embeddings
 
 		result_embeddings = []
 		current_tokens_amount = 0
@@ -84,18 +88,21 @@ class HyperpartisanDataset(data.Dataset):
 			if self.articles_max_length and current_tokens_amount >= self.articles_max_length:
 				break
 
-			sentence_glove_embeddings = glove_embeddings[index - start_index]
 			sentence_elmo_embeddings = torch.Tensor(elmo_embedding_file[str(index)])
-			
+
 			if self.articles_max_length and current_tokens_amount + len(sentence_elmo_embeddings) > self.articles_max_length:
 				sentence_elmo_embeddings = sentence_elmo_embeddings[0:(self.articles_max_length - current_tokens_amount)]
 
 			current_tokens_amount += len(sentence_elmo_embeddings)
 
 			# elmo: [ n_words x (1024) ]; glove: [ n_words x 300 ] => combined: [ n_words x 1324 ]
-			combined_embeddings = torch.cat(
-				[sentence_elmo_embeddings, sentence_glove_embeddings], dim=1)
-			result_embeddings.append(combined_embeddings)
+			if self.concat_glove:
+				sentence_glove_embeddings = glove_embeddings[index - start_index]
+				combined_embeddings = torch.cat(
+					[sentence_elmo_embeddings, sentence_glove_embeddings], dim=1)
+				result_embeddings.append(combined_embeddings)
+			else:
+				result_embeddings.append(sentence_elmo_embeddings)
 
 		elmo_embedding_file.close()
 
@@ -219,7 +226,10 @@ class HyperpartisanDataset(data.Dataset):
 		Creates a file suffix which includes all current configuration options
 		'''
 
-		file_suffix = '_elmo'
+		if self.elmo_model == ELMoModel.Original:
+			file_suffix = '_elmo'
+		elif self.elmo_model == ELMoModel.Small:
+			file_suffix = '_elmo_small'
 
 		if self.lowercase_sentences:
 			file_suffix = f'_lowercase{file_suffix}'

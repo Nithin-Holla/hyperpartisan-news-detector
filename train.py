@@ -7,9 +7,7 @@ from torchtext.vocab import Vectors
 
 import os
 
-from datasets.hyperpartisan_dataset import HyperpartisanDataset
-from datasets.metaphor_dataset import MetaphorDataset
-
+from enums.elmo_model import ELMoModel
 from helpers.hyperpartisan_loader import HyperpartisanLoader
 from helpers.metaphor_loader import MetaphorLoader
 
@@ -33,12 +31,17 @@ utils_helper = UtilsHelper()
 
 def initialize_model(
         argument_parser: ArgumentParserHelper,
-        device: torch.device,
-        glove_vectors_dim: int):
+        device: torch.device):
 
     print('Loading model state...\r', end='')
 
-    total_embedding_dim = Constants.DEFAULT_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
+    if argument_parser.elmo_model == ELMoModel.Original:
+        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION
+    elif argument_parser.elmo_model == ELMoModel.Small:
+        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION
+
+    if argument_parser.concat_glove:
+        total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=argument_parser.hidden_dim,
@@ -77,7 +80,9 @@ def create_hyperpartisan_loaders(
 
     hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=argument_parser.hyperpartisan_dataset_folder,
+        concat_glove=argument_parser.concat_glove,
         glove_vectors=glove_vectors,
+        elmo_model=argument_parser.elmo_model,
         lowercase_sentences=argument_parser.lowercase,
         articles_max_length=argument_parser.hyperpartisan_max_length)
 
@@ -96,7 +101,9 @@ def create_metaphor_loaders(
 
     metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
         metaphor_dataset_folder=argument_parser.metaphor_dataset_folder,
+        concat_glove=argument_parser.concat_glove,
         glove_vectors=glove_vectors,
+        elmo_model=argument_parser.elmo_model,
         lowercase_sentences=argument_parser.lowercase,
         tokenize_sentences=argument_parser.tokenize,
         only_news=argument_parser.only_news)
@@ -362,7 +369,7 @@ def train_and_eval_hyperpartisan(
         new_best_score=(best_f1_score < f1),
         epoch=epoch)
 
-    return f1
+    return f1, accuracy_valid, precision, recall
 
 
 def train_and_eval_metaphor(
@@ -455,7 +462,7 @@ def train_and_eval_joint(
         dataloader=hyperpartisan_validation_dataloader,
         device=device)
 
-    hyperpartisan_f1, precision, recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
+    hyperpartisan_f1, hyperpartisan_precision, hyperpartisan_recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
 
     # Log results
 
@@ -466,8 +473,8 @@ def train_and_eval_joint(
         accuracy_train=train_accuracy,
         valid_loss=valid_loss,
         valid_accuracy=valid_accuracy,
-        valid_precision=precision,
-        valid_recall=recall,
+        valid_precision=hyperpartisan_precision,
+        valid_recall=hyperpartisan_recall,
         valid_f1=hyperpartisan_f1)
 
     print_hyperpartisan_stats(
@@ -475,13 +482,13 @@ def train_and_eval_joint(
         valid_loss=valid_loss,
         train_accuracy=train_accuracy,
         valid_accuracy=valid_accuracy,
-        valid_precision=precision,
-        valid_recall=recall,
+        valid_precision=hyperpartisan_precision,
+        valid_recall=hyperpartisan_recall,
         valid_f1=hyperpartisan_f1,
         epoch=epoch,
         new_best_score=(best_hyperpartisan_f1_score < hyperpartisan_f1))
 
-    return hyperpartisan_f1
+    return hyperpartisan_f1, valid_accuracy, hyperpartisan_precision, hyperpartisan_recall, metaphor_f1
 
 def print_hyperpartisan_stats(
         train_loss,
@@ -545,9 +552,14 @@ def log_metrics(
     summary_writer.add_scalar(
         'valid_f1', valid_f1, global_step=global_step)
 
-def save_best_result(arg_parser: ArgumentParserHelper, best_f1: float):
-    titles = ['time', 'f1']
-    values = [str(datetime.now().time().replace(microsecond=0)), str(best_f1)]
+def save_best_result(arg_parser: ArgumentParserHelper, metrics: dict):
+    titles = ['time']
+    values = [str(datetime.now().time().replace(microsecond=0))]
+
+    for key, value in metrics.items():
+        titles.append(str(key))
+        values.append(str(value))
+
     for key, value in arg_parser.__dict__.items():
         titles.append(str(key))
         values.append(str(value))
@@ -576,12 +588,14 @@ def train_model(argument_parser: ArgumentParserHelper):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load GloVe vectors
-    glove_vectors = utils_helper.load_glove_vectors(
-        argument_parser.vector_file_name, argument_parser.vector_cache_dir, argument_parser.glove_size)
+    if argument_parser.concat_glove:
+        glove_vectors = utils_helper.load_glove_vectors(
+            argument_parser.vector_file_name, argument_parser.vector_cache_dir, argument_parser.glove_size)
+    else:
+        glove_vectors = None
 
     # Define the model, the optimizer and the loss module
-    joint_model, optimizer, start_epoch = initialize_model(
-        argument_parser, device, glove_vectors.dim)
+    joint_model, optimizer, start_epoch = initialize_model(argument_parser, device)
 
     summary_writer = SummaryWriter(
         f'runs/exp-{argument_parser.mode}-odr_{argument_parser.output_dropout_rate}-lr_{argument_parser.learning_rate}-wd_{argument_parser.weight_decay}-lsf_{argument_parser.loss_suppress_factor}')
@@ -602,11 +616,12 @@ def train_model(argument_parser: ArgumentParserHelper):
     tic = time.process_time()
 
     best_f1 = .0
+    best_metrics = {}
 
     for epoch in range(start_epoch, argument_parser.max_epochs + 1):
         # Joint mode by batches
         if argument_parser.mode == TrainingMode.JointBatches:
-            f1 = train_and_eval_joint(
+            f1, hyp_accuracy, hyp_precision, hyp_recall, metaphor_f1 = train_and_eval_joint(
                 joint_model=joint_model,
                 optimizer=optimizer,
                 hyperpartisan_criterion=hyperpartisan_criterion,
@@ -621,6 +636,11 @@ def train_model(argument_parser: ArgumentParserHelper):
                 loss_suppress_factor=argument_parser.loss_suppress_factor,
                 summary_writer=summary_writer,
                 best_hyperpartisan_f1_score=best_f1)
+            metrics = {'hyp_f1': f1,
+                       'hyp_accuracy': hyp_accuracy,
+                       'hyp_precision': hyp_precision,
+                       'hyp_recall': hyp_recall,
+                       'metaphor_f1': metaphor_f1}
 
         else:
             # Joint mode by epochs or single training
@@ -635,10 +655,15 @@ def train_model(argument_parser: ArgumentParserHelper):
                     device=device,
                     best_f1_score=best_f1,
                     epoch=epoch)
+                metrics = {'hyp_f1': 'NA',
+                           'hyp_accuracy': 'NA',
+                           'hyp_precision': 'NA',
+                           'hyp_recall': 'NA',
+                           'metaphor_f1': f1}
 
             if TrainingMode.contains_hyperpartisan(argument_parser.mode):
                 # Complete one epoch of hyperpartisan
-                f1 = train_and_eval_hyperpartisan(
+                f1, hyp_accuracy, hyp_precision, hyp_recall = train_and_eval_hyperpartisan(
                     joint_model=joint_model,
                     optimizer=optimizer,
                     hyperpartisan_criterion=hyperpartisan_criterion,
@@ -648,6 +673,11 @@ def train_model(argument_parser: ArgumentParserHelper):
                     best_f1_score=best_f1,
                     epoch=epoch,
                     summary_writer=summary_writer)
+                metrics = {'hyp_f1': f1,
+                           'hyp_accuracy': hyp_accuracy,
+                           'hyp_precision': hyp_precision,
+                           'hyp_recall': hyp_recall,
+                           'metaphor_f1': 'NA'}
 
             if TrainingMode.contains_metaphor(argument_parser.mode) and not argument_parser.joint_metaphors_first:
                 # Complete one epoch of metaphors AFTER the hyperpartisan
@@ -660,9 +690,15 @@ def train_model(argument_parser: ArgumentParserHelper):
                     device=device,
                     best_f1_score=best_f1,
                     epoch=epoch)
+                metrics = {'hyp_f1': 'NA',
+                           'hyp_accuracy': 'NA',
+                           'hyp_precision': 'NA',
+                           'hyp_recall': 'NA',
+                           'metaphor_f1': f1}
 
         if f1 > best_f1:
             best_f1 = f1
+            best_metrics = metrics
             cache_model(joint_model=joint_model,
                         optimizer=optimizer,
                         epoch=epoch)
@@ -670,7 +706,7 @@ def train_model(argument_parser: ArgumentParserHelper):
     print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0),
                                                              (time.process_time() - tic) / 60))
 
-    save_best_result(argument_parser, best_f1)
+    save_best_result(argument_parser, best_metrics)
 
     summary_writer.close()
 
