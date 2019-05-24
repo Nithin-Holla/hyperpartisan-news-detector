@@ -9,6 +9,8 @@ import torch
 from ast import literal_eval
 import h5py
 
+import sys
+
 class SnliDataset(data.Dataset):
 	def __init__(self, filename: str, glove_vectors: Vectors, use_data: int):
 
@@ -16,8 +18,8 @@ class SnliDataset(data.Dataset):
 
 		self._sentences1, self._sentences2, self._labels, self._ntokens1, self._ntokens2 = self._parse_csv_file(filename, use_data)
 
-		self.elmo_filename1 = filename.split(".")[0] + "_1_elmo.txt"
-		self.elmo_filename2 = filename.split(".")[0] + "_2_elmo.txt"
+		self.elmo_filename1 = filename[:-4] + "_1_elmo.hdf5"
+		self.elmo_filename2 = filename[:-4] + "_2_elmo.hdf5"
 
 		self._data_size = len(self._labels)
 
@@ -32,7 +34,6 @@ class SnliDataset(data.Dataset):
 		# get the GloVe embedding. If it's missing for this word - try lowercasing it
 		words_embeddings1 = [self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in sentence1]
 		words_embeddings2 = [self.glove_vectors[x] if x in self.glove_vectors.stoi else self.glove_vectors[x.lower()] for x in sentence2]
-
 
 		glove_embeddings1 = torch.stack(words_embeddings1)
 		elmo_embedding_file1 = h5py.File(self.elmo_filename1, 'r')
@@ -54,7 +55,7 @@ class SnliDataset(data.Dataset):
 	def __len__(self):
 		return self._data_size
 
-	def _parse_csv_file(self, filename):
+	def _parse_csv_file(self, filename, use_data):
 
 		dtype = {"label": int, "ntokens1": int, "ntokens2": int}
 		converters = {"sentence1": literal_eval, "sentence2": literal_eval}

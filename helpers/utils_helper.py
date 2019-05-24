@@ -60,14 +60,15 @@ class UtilsHelper():
     def calculate_metrics(
             self,
             targets: List,
-            predictions: List):
+            predictions: List,
+            average: str = "binary"):
 
         if sum(predictions) == 0:
             return 0, 0, 0
 
         precision = metrics.precision_score(
-            targets, predictions, average="binary")
-        recall = metrics.recall_score(targets, predictions, average="binary")
-        f1 = metrics.f1_score(targets, predictions, average="binary")
+            targets, predictions, average=average)
+        recall = metrics.recall_score(targets, predictions, average=average)
+        f1 = metrics.f1_score(targets, predictions, average=average)
 
         return f1, precision, recall

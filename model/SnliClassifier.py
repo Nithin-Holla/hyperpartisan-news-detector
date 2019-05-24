@@ -17,7 +17,7 @@ class MLP(nn.Module):
 		self.encoder = SentenceEncoder(embedding_dim, args.hidden_dim, args.num_layers, args.sent_encoder_dropout_rate, device, args.skip_connection)
 
 		self.layers = nn.Sequential(nn.Linear(self.n_dim, self.num_classes),
-									nn.Softmax())
+									nn.Softmax(dim = 0))
 
 	def forward(self, x1, x2, len1, len2, recover_idx1, recover_idx2):
 
@@ -27,8 +27,8 @@ class MLP(nn.Module):
 		emb1_sorted, _ = self.encoder._forward_hyperpartisan(x1, len1)
 		emb2_sorted, _ = self.encoder._forward_hyperpartisan(x2, len2)
 
-		emb1 = torch.index_select(emb1_sorted, dim = 0, recover_idx1)
-		emb2 = torch.index_select(emb2_sorted, dim = 0, recover_idx2)
+		emb1 = torch.index_select(emb1_sorted, 0, recover_idx1)
+		emb2 = torch.index_select(emb2_sorted, 0, recover_idx2)
 
 		# concatenate bacthed embeddings along second dimension
 		concatenated_embeddings = torch.cat([emb1, emb2, torch.abs(emb1 - emb2), emb1 * emb2], 1)

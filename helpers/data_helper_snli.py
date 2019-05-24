@@ -85,11 +85,11 @@ class DataHelperSnli():
 		embedding_dimension = sequences1[0].shape[1]
 
 		padded_sequences1 = np.ones((batch_size, max_length1, embedding_dimension))
-		padded_sequences1 = np.ones((batch_size, max_length2, embedding_dimension))
+		padded_sequences2 = np.ones((batch_size, max_length2, embedding_dimension))
 
 		for i, l1, l2 in zip(range(batch_size), lengths1, lengths2):
 			padded_sequences1[i][0:l1][:] = sequences1[i]
 			padded_sequences2[i][0:l2][:] = sequences2[i]
 		
-		return cls._sort_batch(torch.from_numpy(padded_sequences1), torch.from_numpy(padded_sequences2),
-		 torch.from_numpy(targets), torch.tensor(lengths1), torch.tensor(lengths2))
+		return cls._sort_batch(torch.from_numpy(padded_sequences1).float(), torch.from_numpy(padded_sequences2).float(),
+		 torch.tensor(targets).long(), torch.tensor(lengths1).long(), torch.tensor(lengths2).long())

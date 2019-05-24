@@ -7,17 +7,15 @@ from torchtext.vocab import Vectors
 
 import argparse
 import os
+from datetime import datetime
+import time
 
 from constants import Constants
 from datasets.snli_dataset import SnliDataset
 from helpers.snli_loader import SnliLoader
 from helpers.data_helper_snli import DataHelperSnli
 from helpers.utils_helper import UtilsHelper
-
-from model.SnliClassifer import MLP
-
-from datetime import datetime
-import time
+from model.SnliClassifier import MLP
 
 from tensorboardX import SummaryWriter
 
@@ -25,7 +23,7 @@ utils_helper = UtilsHelper()
 
 def initialize_model(argument_parser, device, glove_vectors_dim):
 
-	total_embedding_dim = Constants.DEFAULT_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
+	total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION + glove_vectors_dim
 
 	model = MLP(argument_parser, total_embedding_dim, device).to(device)
 
@@ -48,18 +46,18 @@ def initialize_model(argument_parser, device, glove_vectors_dim):
 		print('Loading model state...Done')
 
 	print("Starting training in '%s' mode from epoch %d..." %
-		  (argument_parser.mode, start_epoch))
+		  ("SNLI", start_epoch))
 
-	return model, optimizer, epoch
+	return model, optimizer, start_epoch
 
-def create_loaders(argument_parser, glove_vectors):
+def create_snli_loaders(argument_parser, glove_vectors):
 
-	train_dataset, validation_dataset, test_dataset = SnliLoader.get_snli_datasets(snli_dataset_folder, glove_vectors, argument_parser)
+	train_dataset, validation_dataset, test_dataset = SnliLoader.get_snli_datasets(argument_parser.snli_dataset_folder, glove_vectors, argument_parser)
 
 	train_dataloader, validation_dataloader, test_dataloader = DataHelperSnli.create_dataloaders(
 		train_dataset, validation_dataset, test_dataset, argument_parser.batch_size, shuffle=True)
 
-	return train_dataloader, validation_dataloader. test_dataloader
+	return train_dataloader, validation_dataloader, test_dataloader
 
 def iterate_dataset(model, optimizer, criterion, snli_data,	device,	train = False):
 
@@ -91,9 +89,9 @@ def iterate_dataset(model, optimizer, criterion, snli_data,	device,	train = Fals
 
 			loss = criterion(logits, batch_targets)
 
-	accuracy = utils_helper.calculate_accuracy(predictions, batch_targets)
+	accuracy = utils_helper.calculate_accuracy(logits, batch_targets)
 
-	return loss.item(), accuracy.item(), batch_targets.long().tolist(), torch.argmax(predictions, dim=1).long().tolist()
+	return loss.item(), accuracy.item(), batch_targets.long().tolist(), torch.argmax(logits, dim=1).long().tolist()
 
 def forward_full_dataset(model, optimizer, criterion, dataloader, device, train = False):
 
@@ -104,6 +102,7 @@ def forward_full_dataset(model, optimizer, criterion, dataloader, device, train 
 	running_accuracy = 0
 
 	total_length = len(dataloader)
+
 	for step, snli_data in enumerate(dataloader):
 
 		loss, accuracy, batch_targets, batch_predictions = iterate_dataset(model, optimizer, criterion, snli_data, device, train)
@@ -118,32 +117,18 @@ def forward_full_dataset(model, optimizer, criterion, dataloader, device, train 
 
 	return final_loss, final_accuracy, all_targets, all_predictions
 
-def train_and_eval_dataset(model, optimizer, criterion, train_dataloader, validation_dataloader, device, best_f1_score,	summary_writer,	epoch):
+def print_stats(train_loss, valid_loss,	train_accuracy,	valid_accuracy,	valid_precision, valid_recall, valid_f1,
+			 epoch, art_epoch, eval_per_epoch, new_best_score = False):
 
-	model.train()
-	loss_train, accuracy_train, _, _ = forward_full_dataset(model, optimizer, criterion, train_dataloader, device, train=True)
+	epoch_str = str(epoch)
+	if len(epoch_str) == 1:
+		epoch_str = "0" + epoch_str
 
-	model.eval()
-	loss_valid, accuracy_valid, valid_targets, valid_predictions = forward_full_dataset(model, optimizer, criterion, validation_dataloader, device)
+	new_best_str = '<- New Best' if new_best_score else ''
 
-	f1, precision, recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
-
-	log_metrics(summary_writer,	epoch, loss_train, accuracy_train, loss_valid, accuracy_valid, precision, recall, f1)
-
-	print_stats(loss_train, loss_valid, accuracy_train, accuracy_valid, precision, recall, f1, best_f1_score < f1, epoch)
-
-	return f1
-
-def print_stats(train_loss, valid_loss,	train_accuracy,	valid_accuracy,	valid_precision, valid_recall, valid_f1, epoch = None, new_best_score = False):
-
-	epoch_str = str(epoch) if epoch is not None else '_'
-
-	new_best_str = '<- new best result' if new_best_score else ''
-
-	print("[{}] epoch {} || LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, "
-		  "valid = {:.4f} || PRECISION: valid = {:.4f} || RECALL: valid = {:.4f} || F1 SCORE = {:.4f} {}".format(
-			  datetime.now().time().replace(microsecond=0), epoch_str, train_loss, valid_loss, train_accuracy, valid_accuracy,
-			  valid_precision, valid_recall, valid_f1, new_best_str))
+	print("[{}] epoch {}({}/{})|| LOSS: train = {:.4f}, valid = {:.4f} || ACCURACY: train = {:.4f}, valid = {:.4f} || F1 SCORE : {:.4f} {}".format(
+			  datetime.now().time().replace(microsecond=0), 
+			  epoch_str, art_epoch, eval_per_epoch, train_loss, valid_loss, train_accuracy, valid_accuracy, valid_f1, new_best_str))
 
 def cache_model(model, optimizer, epoch=None):
 	torch_state = {'model_state_dict': model.state_dict(),
@@ -188,63 +173,93 @@ def train_model(argument_parser):
 	tic = time.clock()
 
 	best_f1 = .0
-	best_epoch = 1
-
 	counter = 0
+	running_loss, running_accuracy = 0, 0
+
+	total_length = len(train_dataloader)
+	eval_step = int(total_length / argument_parser.eval_per_epoch)
+	artificial_epoch = 0
 
 	for epoch in range(start_epoch, argument_parser.max_epochs + 1):
 
-		f1 = train_and_eval_dataset(model, optimizer, criterion, train_dataloader, validation_dataloader, device, best_f1_score, summary_writer, epoch)
+		for train_step, snli_train_data in enumerate(train_dataloader):
 
-		if f1 > best_f1:
-			counter = 0
-			best_f1 = f1
-			best_epoch = epoch
-			cache_model(model, optimizer, epoch)
-		else:
-			counter += 1
+			model.train()
+			loss, accuracy, _, _ = iterate_dataset(model, optimizer, criterion, snli_train_data, device, train = True)
 
-		if counter == 3:
+			running_loss += loss
+			running_accuracy += accuracy
+
+			if not train_step % eval_step:
+
+				artificial_epoch += 1
+
+				model.eval()
+				valid_loss, valid_accuracy, valid_targets, valid_predictions = forward_full_dataset(model, optimizer, criterion, validation_dataloader, device)
+
+				valid_f1, valid_precision, valid_recall = utils_helper.calculate_metrics(valid_targets, valid_predictions, average = "micro")
+
+				train_loss = running_loss / eval_step
+				train_accuracy = running_accuracy / eval_step
+				running_loss, running_accuracy = 0, 0
+
+				log_metrics(summary_writer,	artificial_epoch, train_loss, train_accuracy, valid_loss, valid_accuracy, valid_precision, valid_recall, valid_f1)
+
+				print_stats(train_loss, valid_loss, train_accuracy, valid_accuracy, valid_precision, valid_recall, valid_f1, 
+					epoch, train_step//eval_step + 1, argument_parser.eval_per_epoch, new_best_score = best_f1 < valid_f1)	
+
+				if valid_f1 > best_f1:
+					counter = 0
+					best_f1 = valid_f1
+					best_artificial_epoch = artificial_epoch
+					cache_model(model, optimizer, artificial_epoch)
+				else:
+					counter += 1
+
+		if counter > 5:
 			break
 
 	print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0), (time.clock() - tic) / 60))
-	print("[{}] Loading model of epoch {} with f1 score {:.4f}".format(datetime.now().time().replace(microsecond=0), best_epoch, best_f1))
+	print("[{}] Loading model of epoch {}({}/{}) with f1 score {:.4f}".format(datetime.now().time().replace(microsecond=0),
+	 best_artificial_epoch // argument_parser.eval_per_epoch, best_artificial_epoch % argument_parser.eval_per_epoch, argument_parser.eval_per_epoch, best_f1))
 
 	summary_writer.close()
 
-	model = MLP(argument_parser, total_embedding_dim, device).to(device)
+	model = MLP(argument_parser, Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION + glove_vectors.dim, device).to(device)
+
+	checkpoint = torch.load(argument_parser.model_checkpoint)
 	model.load_state_dict(checkpoint['model_state_dict'])
 
 	model.eval()
-	with torch.no_grad():
-		test_loss, test_accuracy, test_targets, test_predictions = forward_full_dataset(model, optimizer, criterion, test_dataloader, device)
+	test_loss, test_accuracy, test_targets, test_predictions = forward_full_dataset(model, optimizer, criterion, test_dataloader, device)
 
-	test_f1, test_precision, test_recall = utils_helper.calculate_metrics(test_targets, test_predictions)
+	test_f1, test_precision, test_recall = utils_helper.calculate_metrics(test_targets, test_predictions, average = "micro")
 
 	print("[{}] TEST SET: loss = {:.4f}, accu = {:.4f}, precision = {:.4f}, recall = {:.4f}, f1 = {:.4f}".format(
 		datetime.now().time().replace(microsecond=0), test_loss, test_accuracy, test_precision, test_recall, test_f1))
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model_checkpoint', type=str, required=True, "checkpoints/snli/encoder_classifer.pt")
-    parser.add_argument('--load_model', action='store_true', default = False)
-    parser.add_argument('--vector_file_name', type=str, required=True)
-    parser.add_argument('--vector_cache_dir', type=str, default=Constants.DEFAULT_VECTOR_CACHE_DIR)
-    parser.add_argument('--learning_rate', type=float, default=0.002)
-    parser.add_argument('--max_epochs', type=int, default=20)
-    parser.add_argument('--batch_size', type=int, default = 64)
-    parser.add_argument('--hidden_dim', type=int, default=Constants.DEFAULT_HIDDEN_DIMENSION)
-    parser.add_argument('--glove_size', type=int, default = 10000)
-    parser.add_argument('--weight_decay', type=float, default = 0.0)
-    parser.add_argument('--snli_dataset_folder', type=str, required = True)
-    parser.add_argument('--deterministic', type=int, default = True)
-    parser.add_argument('--sent_encoder_dropout_rate', type=float, default=0.)
-    parser.add_argument('--num_layers', type=int, default=Constants.DEFAULT_NUM_LAYERS)
-    parser.add_argument('--skip_connection', action='store_true', default=Constants.DEFAULT_SKIP_CONNECTION)
-    parser.add_argument('--use_data_train', type=int, default = 6400)
-    parser.add_argument('--use_data_valid', type=int, default = 640)
-    parser.add_argument('--use_data_test', type=int, default = 640)
-    argument_parser = parser.parse_args()
+	parser = argparse.ArgumentParser()
+	parser.add_argument('--model_checkpoint', type=str, default = "checkpoints/snli/encoder_classifer.pt")
+	parser.add_argument('--load_model', action='store_true', default = False)
+	parser.add_argument('--vector_file_name', type=str, default = "glove.840B.300d.txt")
+	parser.add_argument('--vector_cache_dir', type=str)
+	parser.add_argument('--learning_rate', type=float, default=0.002)
+	parser.add_argument('--max_epochs', type=int, default=20)
+	parser.add_argument('--batch_size', type=int, default = 16)
+	parser.add_argument('--hidden_dim', type=int, default=Constants.DEFAULT_HIDDEN_DIMENSION)
+	parser.add_argument('--glove_size', type=int, default = 1000)
+	parser.add_argument('--weight_decay', type=float, default = 0.0)
+	parser.add_argument('--snli_dataset_folder', type=str)
+	parser.add_argument('--deterministic', type=int, default = 42)
+	parser.add_argument('--sent_encoder_dropout_rate', type=float, default=0.)
+	parser.add_argument('--num_layers', type=int, default=Constants.DEFAULT_NUM_LAYERS)
+	parser.add_argument('--skip_connection', action='store_true', default=Constants.DEFAULT_SKIP_CONNECTION)
+	parser.add_argument('--use_data_train', type=int, default = 64000)
+	parser.add_argument('--use_data_valid', type=int, default = 1280)
+	parser.add_argument('--use_data_test', type=int, default = 1280
+	parser.add_argument('--eval_per_epoch', type=int, default = 10)
+	argument_parser = parser.parse_args()
 
 	train_model(argument_parser)
