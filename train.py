@@ -182,13 +182,16 @@ def forward_full_hyperpartisan(
         
         hyperpartisan_batch = HyperpartisanBatch(hyperpartisan_batch_max_size)
         hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
-        while not hyperpartisan_batch.is_full():
-            try:
-                _, hyperpartisan_data = next(hyperpartisan_iterator)
-            except StopIteration:
-                break
+        
+        # get bigger than 1 batches only when training to limit memory errors
+        if train:
+            while not hyperpartisan_batch.is_full():
+                try:
+                    _, hyperpartisan_data = next(hyperpartisan_iterator)
+                except StopIteration:
+                    break
             
-            hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
+                hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
 
         hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
 
@@ -299,12 +302,15 @@ def forward_full_joint_batches(
 
     hyperpartisan_iterator = enumerate(hyperpartisan_iterator)
     metaphor_iterator = enumerate(metaphor_iterator)
+    batch_counter = 0
     while True:
         try:
             step, hyperpartisan_data = next(hyperpartisan_iterator)
             _, metaphor_batch = next(metaphor_iterator)
         except StopIteration:
             break
+
+        batch_counter += 1
 
         assert hyperpartisan_data != None
         assert metaphor_batch != None
@@ -323,13 +329,16 @@ def forward_full_joint_batches(
 
         hyperpartisan_batch = HyperpartisanBatch(hyperpartisan_batch_max_size)
         hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
-        while not hyperpartisan_batch.is_full():
-            try:
-                _, hyperpartisan_data = next(hyperpartisan_iterator)
-            except StopIteration:
-                break
+        
+        # get bigger than 1 batches only when training to limit memory errors
+        if train:
+            while not hyperpartisan_batch.is_full():
+                try:
+                    _, hyperpartisan_data = next(hyperpartisan_iterator)
+                except StopIteration:
+                    break
 
-            hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
+                hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
 
         hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
         
@@ -357,8 +366,8 @@ def forward_full_joint_batches(
                 device=device,
                 train=train)
 
-    final_loss = running_hyperpartisan_loss / (step + 1)
-    final_accuracy = running_hyperpartisan_accuracy / (step + 1)
+    final_loss = running_hyperpartisan_loss / batch_counter
+    final_accuracy = running_hyperpartisan_accuracy / batch_counter
 
     return final_loss, final_accuracy, all_hyperpartisan_targets, all_hyperpartisan_predictions
 
