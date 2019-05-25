@@ -18,7 +18,8 @@ class JointModel(nn.Module):
             doc_encoder_dropout_rate,
             output_dropout_rate,
             device,
-            skip_connection):
+            skip_connection,
+            include_article_features):
 
         super(JointModel, self).__init__()
         self.sentence_encoder = SentenceEncoder(
@@ -29,8 +30,15 @@ class JointModel(nn.Module):
             doc_encoder_dim = 2 * hidden_dim
         self.document_encoder = DocumentEncoder(
             doc_encoder_dim, hidden_dim, doc_encoder_dropout_rate, device)
+
+        self.include_article_features = include_article_features
+        if include_article_features:
+            hyp_fc_input_dim = 2 * hidden_dim + 18
+        else:
+            hyp_fc_input_dim = 2 * hidden_dim
+
         self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
-                                              nn.Linear(2 * hidden_dim + 18, 1),
+                                              nn.Linear(hyp_fc_input_dim, 1),
                                               nn.Sigmoid())
 
         self.device = device
@@ -103,7 +111,8 @@ class JointModel(nn.Module):
         doc_embedding = torch.index_select(
             sorted_doc_embedding, dim=0, index=recover_idx_sent)
 
-        doc_embedding = torch.cat([doc_embedding, doc_features], dim = 1)
+        if self.include_article_features:
+            doc_embedding = torch.cat([doc_embedding, doc_features], dim = 1)
 
         sent_attn = torch.index_select(sorted_sent_attn, dim=0, index=recover_idx_sent).squeeze(2)
 

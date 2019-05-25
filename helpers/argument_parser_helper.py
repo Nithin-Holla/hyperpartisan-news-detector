@@ -69,6 +69,8 @@ class ArgumentParserHelper():
                             help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
         parser.add_argument('--hyperpartisan_batch_max_size', type=int, default=Constants.DEFAULT_HYPERPARTISAN_BATCH_MAX_SIZE,
                             help='The maximum size used for dynamically batching from hyperpartisan dataset')
+        parser.add_argument('--include_article_features', action='store_true',
+                            help='Whether to append handcrafted article features to the hyperpartisan fc layer')
 
         config = parser.parse_args()
 
@@ -105,6 +107,7 @@ class ArgumentParserHelper():
         self._elmo_model: ELMoModel = config.elmo_model
         self._concat_glove: bool = config.concat_glove
         self._hyperpartisan_batch_max_size: int = config.hyperpartisan_batch_max_size
+        self._include_article_features: bool = config.include_article_features
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -129,7 +132,8 @@ class ArgumentParserHelper():
               f'skip_connection: {self._skip_connection}\n' +
               f'elmo_model: {self._elmo_model}\n' +
               f'concat_glove: {self._concat_glove}\n' +
-              f'hyperpartisan_batch_max_size: {self._hyperpartisan_batch_max_size}\n')
+              f'hyperpartisan_batch_max_size: {self._hyperpartisan_batch_max_size}\n' +
+              f'include_article_features: {self._include_article_features}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -250,3 +254,7 @@ class ArgumentParserHelper():
     @property
     def hyperpartisan_batch_max_size(self) -> int:
         return self._hyperpartisan_batch_max_size
+
+    @property
+    def include_article_features(self) -> bool:
+        return self._include_article_features

@@ -43,7 +43,8 @@ def initialize_model(argument_parser, device):
                              doc_encoder_dropout_rate=.0,
                              output_dropout_rate=.0,
                              device=device,
-                             skip_connection=argument_parser.skip_connection).to(device)
+                             skip_connection=argument_parser.skip_connection,
+                             include_article_features=argument_parser.include_article_features).to(device)
 
     checkpoint = torch.load(argument_parser.model_checkpoint, map_location="cpu")
     joint_model.load_state_dict(checkpoint['model_state_dict'])
@@ -237,7 +238,9 @@ if __name__ == '__main__':
     parser.add_argument('--concat_glove', action='store_true',
                         help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
     parser.add_argument('--output', type=str, choices = ["predictions", "probabilities"], default = "predictions",
-                        help = "whether to return the predictions or the probabilities of the instances")
+                        help="whether to return the predictions or the probabilities of the instances")
+    parser.add_argument('--include_article_features', action='store_true',
+                        help='Whether to append handcrafted article features to the hyperpartisan fc layer')
 
     argument_parser = parser.parse_args()
 

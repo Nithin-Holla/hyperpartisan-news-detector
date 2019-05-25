@@ -64,7 +64,8 @@ def initialize_models(
                                      doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                                      output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
                                      device=device,
-                                     skip_connection=Constants.DEFAULT_SKIP_CONNECTION).to(device)
+                                     skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                                     include_article_features=config.include_article_features).to(device)
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
                              hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
@@ -73,7 +74,8 @@ def initialize_models(
                              doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
                              output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
                              device=device,
-                             skip_connection=Constants.DEFAULT_SKIP_CONNECTION).to(device)
+                             skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                             include_article_features=config.include_article_features).to(device)
     
     load_model_state(hyperpartisan_model, hyperpartisan_model_checkpoint_path)
     load_model_state(joint_model, joint_model_checkpoint_path)
@@ -158,6 +160,8 @@ if __name__ == '__main__':
                         help='ELMo model from which vectors are used')
     parser.add_argument('--concat_glove', action='store_true',
                         help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
+    parser.add_argument('--include_article_features', action='store_true',
+                        help='Whether to append handcrafted article features to the hyperpartisan fc layer')
 
     config = parser.parse_args()
 

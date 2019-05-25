@@ -175,7 +175,8 @@ def predict(config):
                                      doc_encoder_dropout_rate=0,
                                      output_dropout_rate=0,
                                      device=device,
-                                     skip_connection=config.skip_connection)
+                                     skip_connection=config.skip_connection,
+                                     include_article_features=config.include_article_features)
 
     # Load the model if found
     if os.path.isfile(config.hyperpartisan_model_checkpoint):
@@ -192,7 +193,8 @@ def predict(config):
                              doc_encoder_dropout_rate=0,
                              output_dropout_rate=0,
                              device=device,
-                             skip_connection=config.skip_connection)
+                             skip_connection=config.skip_connection,
+                             include_article_features=config.include_article_features)
 
     # Load the model if found
     if os.path.isfile(config.joint_model_checkpoint):
@@ -268,6 +270,8 @@ if __name__ == '__main__':
                         help='ELMo model from which vectors are used')
     parser.add_argument('--concat_glove', action='store_true',
                         help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
+    parser.add_argument('--include_article_features', action='store_true',
+                        help='Whether to append handcrafted article features to the hyperpartisan fc layer')
 
     config = parser.parse_args()
 

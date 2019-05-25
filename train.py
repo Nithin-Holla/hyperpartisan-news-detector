@@ -52,7 +52,8 @@ def initialize_model(
                              doc_encoder_dropout_rate=argument_parser.doc_encoder_dropout_rate,
                              output_dropout_rate=argument_parser.output_dropout_rate,
                              device=device,
-                             skip_connection=argument_parser.skip_connection).to(device)
+                             skip_connection=argument_parser.skip_connection,
+                             include_article_features=argument_parser.include_article_features).to(device)
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, joint_model.parameters()),
                            lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
 
