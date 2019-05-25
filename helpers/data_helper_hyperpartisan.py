@@ -37,7 +37,7 @@ class DataHelperHyperpartisan():
                 dataset=validation_dataset,
                 batch_size=1,
                 num_workers=1,
-                shuffle=shuffle,
+                shuffle=False,
                 drop_last=drop_last)
 
         test_loader = None
@@ -46,7 +46,7 @@ class DataHelperHyperpartisan():
                 dataset=test_dataset,
                 batch_size=1,
                 num_workers=1,
-                shuffle=shuffle,
+                shuffle=False,
                 drop_last=drop_last)
 
         return train_loader, validation_loader, test_loader

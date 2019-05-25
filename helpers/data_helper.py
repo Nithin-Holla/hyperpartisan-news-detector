@@ -36,7 +36,7 @@ class DataHelper():
                 dataset=validation_dataset,
                 batch_size=batch_size,
                 num_workers=1,
-                shuffle=shuffle,
+                shuffle=False,
                 collate_fn=cls._pad_and_sort_batch)
 
         test_loader = None
@@ -45,7 +45,7 @@ class DataHelper():
                 dataset=test_dataset,
                 batch_size=batch_size,
                 num_workers=1,
-                shuffle=shuffle,
+                shuffle=False,
                 collate_fn=cls._pad_and_sort_batch)
 
         return train_loader, validation_loader, test_loader
