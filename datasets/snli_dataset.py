@@ -59,6 +59,8 @@ class SnliDataset(data.Dataset):
 
 		dtype = {"label": int, "ntokens1": int, "ntokens2": int}
 		converters = {"sentence1": literal_eval, "sentence2": literal_eval}
+		if use_data:
+			use_data = int(use_data)
 		df = pd.read_csv(filename, index_col = 0, sep = "\t", dtype = dtype, converters = converters, nrows = use_data)
 
 		return df.sentence1.tolist(), df.sentence2.tolist(), df.label.tolist(), df.ntokens1.tolist(), df.ntokens2.tolist()

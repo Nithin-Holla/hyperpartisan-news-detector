@@ -182,7 +182,7 @@ def train_model(argument_parser):
 
 	for epoch in range(start_epoch, argument_parser.max_epochs + 1):
 
-		for train_step, snli_train_data in enumerate(train_dataloader):
+		for train_step, snli_train_data in enumerate(train_dataloader, start = 1):
 
 			model.train()
 			loss, accuracy, _, _ = iterate_dataset(model, optimizer, criterion, snli_train_data, device, train = True)
@@ -206,7 +206,7 @@ def train_model(argument_parser):
 				log_metrics(summary_writer,	artificial_epoch, train_loss, train_accuracy, valid_loss, valid_accuracy, valid_precision, valid_recall, valid_f1)
 
 				print_stats(train_loss, valid_loss, train_accuracy, valid_accuracy, valid_precision, valid_recall, valid_f1, 
-					epoch, train_step//eval_step + 1, argument_parser.eval_per_epoch, new_best_score = best_f1 < valid_f1)	
+					epoch, train_step//eval_step, argument_parser.eval_per_epoch, new_best_score = best_f1 < valid_f1)	
 
 				if valid_f1 > best_f1:
 					counter = 0
@@ -216,7 +216,7 @@ def train_model(argument_parser):
 				else:
 					counter += 1
 
-		if counter > 5:
+		if counter > argument_parser.eval_per_epoch - 1:
 			break
 
 	print("[{}] Training completed in {:.2f} minutes".format(datetime.now().time().replace(microsecond=0), (time.clock() - tic) / 60))
@@ -241,25 +241,31 @@ def train_model(argument_parser):
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--model_checkpoint', type=str, default = "checkpoints/snli/encoder_classifer.pt")
 	parser.add_argument('--load_model', action='store_true', default = False)
 	parser.add_argument('--vector_file_name', type=str, default = "glove.840B.300d.txt")
 	parser.add_argument('--vector_cache_dir', type=str)
-	parser.add_argument('--learning_rate', type=float, default=0.002)
-	parser.add_argument('--max_epochs', type=int, default=20)
-	parser.add_argument('--batch_size', type=int, default = 16)
+	parser.add_argument('--learning_rate', type=float, default = 0.0001)
+	parser.add_argument('--max_epochs', type=int, default = 20)
+	parser.add_argument('--batch_size', type=int, default = 64)
 	parser.add_argument('--hidden_dim', type=int, default=Constants.DEFAULT_HIDDEN_DIMENSION)
-	parser.add_argument('--glove_size', type=int, default = 1000)
-	parser.add_argument('--weight_decay', type=float, default = 0.0)
+	parser.add_argument('--glove_size', default = None)
+	parser.add_argument('--weight_decay', type=float, default = 0.0001)
 	parser.add_argument('--snli_dataset_folder', type=str)
-	parser.add_argument('--deterministic', type=int, default = 42)
+	parser.add_argument('--deterministic', default = False)
 	parser.add_argument('--sent_encoder_dropout_rate', type=float, default=0.)
 	parser.add_argument('--num_layers', type=int, default=Constants.DEFAULT_NUM_LAYERS)
 	parser.add_argument('--skip_connection', action='store_true', default=Constants.DEFAULT_SKIP_CONNECTION)
-	parser.add_argument('--use_data_train', type=int, default = 64000)
-	parser.add_argument('--use_data_valid', type=int, default = 1280)
-	parser.add_argument('--use_data_test', type=int, default = 1280
+	parser.add_argument('--use_data_train', default = None)
+	parser.add_argument('--use_data_valid', default = None)
+	parser.add_argument('--use_data_test', default = None)
 	parser.add_argument('--eval_per_epoch', type=int, default = 10)
+	parser.add_argument('--model_checkpoint', type=str, default = "checkpoints/snli/run.pt")
 	argument_parser = parser.parse_args()
+
+	print("*** Hyperparameters ***")
+	print("_"*50)
+	for key, value in vars(argument_parser).items():
+		print(key + ' : ' + str(value))
+	print("_"*50)
 
 	train_model(argument_parser)

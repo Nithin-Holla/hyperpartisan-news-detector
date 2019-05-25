@@ -16,8 +16,8 @@ class MLP(nn.Module):
 
 		self.encoder = SentenceEncoder(embedding_dim, args.hidden_dim, args.num_layers, args.sent_encoder_dropout_rate, device, args.skip_connection)
 
-		self.layers = nn.Sequential(nn.Linear(self.n_dim, self.num_classes),
-									nn.Softmax(dim = 0))
+		self.layers = nn.Sequential(nn.Linear(self.n_dim, self.num_classes)
+									)
 
 	def forward(self, x1, x2, len1, len2, recover_idx1, recover_idx2):
 

@@ -22,6 +22,9 @@ class UtilsHelper():
 
         print('Loading GloVe vectors...\r', end='')
 
+        if glove_size:
+            glove_size = int(glove_size)
+
         glove_vectors = torchtext.vocab.Vectors(name=vector_file_name,
                                                 cache=vector_cache_dir,
                                                 max_vectors=glove_size)
