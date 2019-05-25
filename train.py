@@ -7,6 +7,8 @@ from torchtext.vocab import Vectors
 
 import os
 
+from batches.hyperpartisan_batch import HyperpartisanBatch
+
 from enums.elmo_model import ELMoModel
 from helpers.hyperpartisan_loader import HyperpartisanLoader
 from helpers.metaphor_loader import MetaphorLoader
@@ -156,6 +158,7 @@ def forward_full_hyperpartisan(
         criterion: Module,
         dataloader: DataLoader,
         device: torch.device,
+        hyperpartisan_batch_max_size: int,
         train: bool = False):
 
     all_targets = []
@@ -165,8 +168,29 @@ def forward_full_hyperpartisan(
     running_accuracy = 0
 
     total_length = len(dataloader)
-    for step, hyperpartisan_data in enumerate(dataloader):
+    hyperpartisan_iterator = enumerate(dataloader)
+    batches_counter = 0
+
+    while True:
+        try:
+            step, hyperpartisan_data = next(hyperpartisan_iterator)
+        except StopIteration:
+            break
+
+        batches_counter += 1
         print(f'Step {step+1}/{total_length}                  \r', end='')
+        
+        hyperpartisan_batch = HyperpartisanBatch(hyperpartisan_batch_max_size)
+        hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
+        while not hyperpartisan_batch.is_full():
+            try:
+                _, hyperpartisan_data = next(hyperpartisan_iterator)
+            except StopIteration:
+                break
+            
+            hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
+
+        hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
 
         loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
             joint_model=joint_model,
@@ -181,8 +205,8 @@ def forward_full_hyperpartisan(
         all_targets += batch_targets
         all_predictions += batch_predictions
 
-    final_loss = running_loss / (step + 1)
-    final_accuracy = running_accuracy / (step + 1)
+    final_loss = running_loss / batches_counter
+    final_accuracy = running_accuracy / batches_counter
 
     return final_loss, final_accuracy, all_targets, all_predictions
 
@@ -255,6 +279,7 @@ def forward_full_joint_batches(
         device: torch.device,
         joint_metaphors_first: bool,
         loss_suppress_factor: float,
+        hyperpartisan_batch_max_size: int,
         train: bool = False):
 
     all_hyperpartisan_targets = []
@@ -272,13 +297,21 @@ def forward_full_joint_batches(
     else:
         metaphor_iterator = itertools.cycle(metaphor_iterator)
 
-    for step, (hyperpartisan_batch, metaphor_batch) in enumerate(zip(hyperpartisan_iterator, metaphor_iterator)):
-        print(f'Step {step+1}/{total_length}                  \r', end='')
+    hyperpartisan_iterator = enumerate(hyperpartisan_iterator)
+    metaphor_iterator = enumerate(metaphor_iterator)
+    while True:
+        try:
+            step, hyperpartisan_data = next(hyperpartisan_iterator)
+            _, metaphor_batch = next(metaphor_iterator)
+        except StopIteration:
+            break
 
-        assert hyperpartisan_batch != None
+        assert hyperpartisan_data != None
         assert metaphor_batch != None
 
-        if joint_metaphors_first and metaphor_batch != None:
+        print(f'Step {step+1}/{total_length}                  \r', end='')
+
+        if joint_metaphors_first:
             _, _ = iterate_metaphor(
                 joint_model=joint_model,
                 optimizer=optimizer,
@@ -287,23 +320,35 @@ def forward_full_joint_batches(
                 device=device,
                 train=train)
 
-        if hyperpartisan_batch != None:
-            loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
-                joint_model=joint_model,
-                optimizer=optimizer,
-                criterion=hyperpartisan_criterion,
-                hyperpartisan_data=hyperpartisan_batch,
-                device=device,
-                train=train,
-                loss_suppress_factor=loss_suppress_factor)
 
-            running_hyperpartisan_loss += loss
-            running_hyperpartisan_accuracy += accuracy
-            
-            all_hyperpartisan_targets.extend(batch_targets)
-            all_hyperpartisan_predictions.extend(batch_predictions)
+        hyperpartisan_batch = HyperpartisanBatch(hyperpartisan_batch_max_size)
+        hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
+        while not hyperpartisan_batch.is_full():
+            try:
+                _, hyperpartisan_data = next(hyperpartisan_iterator)
+            except StopIteration:
+                break
 
-        if not joint_metaphors_first and metaphor_batch != None:
+            hyperpartisan_batch.add_data(hyperpartisan_data[0], hyperpartisan_data[1].item(), hyperpartisan_data[2], hyperpartisan_data[3].item(), hyperpartisan_data[4])
+
+        hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
+        
+        loss, accuracy, batch_targets, batch_predictions = iterate_hyperpartisan(
+            joint_model=joint_model,
+            optimizer=optimizer,
+            criterion=hyperpartisan_criterion,
+            hyperpartisan_data=hyperpartisan_data,
+            device=device,
+            train=train,
+            loss_suppress_factor=loss_suppress_factor)
+
+        running_hyperpartisan_loss += loss
+        running_hyperpartisan_accuracy += accuracy
+        
+        all_hyperpartisan_targets.extend(batch_targets)
+        all_hyperpartisan_predictions.extend(batch_predictions)
+
+        if not joint_metaphors_first:
             _, _ = iterate_metaphor(
                 joint_model=joint_model,
                 optimizer=optimizer,
@@ -327,7 +372,8 @@ def train_and_eval_hyperpartisan(
         device: torch.device,
         best_f1_score: int,
         summary_writer: SummaryWriter,
-        epoch: int):
+        epoch: int,
+        hyperpartisan_batch_max_size: int):
 
     joint_model.train()
 
@@ -335,7 +381,9 @@ def train_and_eval_hyperpartisan(
                                                                   optimizer=optimizer,
                                                                   criterion=hyperpartisan_criterion,
                                                                   dataloader=hyperpartisan_train_dataloader,
-                                                                  device=device, train=True)
+                                                                  device=device,
+                                                                  hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
+                                                                  train=True)
 
     joint_model.eval()
 
@@ -343,6 +391,7 @@ def train_and_eval_hyperpartisan(
                                                                                               optimizer=None,
                                                                                               criterion=hyperpartisan_criterion,
                                                                                               dataloader=hyperpartisan_validation_dataloader,
+                                                                                              hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
                                                                                               device=device)
 
     f1, precision, recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
@@ -419,7 +468,8 @@ def train_and_eval_joint(
         epoch: int,
         loss_suppress_factor: float,
         summary_writer: SummaryWriter,
-        best_hyperpartisan_f1_score: bool):
+        best_hyperpartisan_f1_score: bool,
+        hyperpartisan_batch_max_size: int):
 
     # Train
     joint_model.train()
@@ -434,6 +484,7 @@ def train_and_eval_joint(
         device=device,
         loss_suppress_factor=loss_suppress_factor,
         joint_metaphors_first=joint_metaphors_first,
+        hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
         train=True)
 
     # Evaluate
@@ -460,6 +511,7 @@ def train_and_eval_joint(
         optimizer=None,
         criterion=hyperpartisan_criterion,
         dataloader=hyperpartisan_validation_dataloader,
+        hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
         device=device)
 
     hyperpartisan_f1, hyperpartisan_precision, hyperpartisan_recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
@@ -635,7 +687,9 @@ def train_model(argument_parser: ArgumentParserHelper):
                 epoch=epoch,
                 loss_suppress_factor=argument_parser.loss_suppress_factor,
                 summary_writer=summary_writer,
-                best_hyperpartisan_f1_score=best_f1)
+                best_hyperpartisan_f1_score=best_f1,
+                hyperpartisan_batch_max_size=argument_parser.hyperpartisan_batch_max_size)
+
             metrics = {'hyp_f1': f1,
                        'hyp_accuracy': hyp_accuracy,
                        'hyp_precision': hyp_precision,
@@ -672,7 +726,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                     device=device,
                     best_f1_score=best_f1,
                     epoch=epoch,
-                    summary_writer=summary_writer)
+                    summary_writer=summary_writer,
+                    hyperpartisan_batch_max_size=argument_parser.hyperpartisan_batch_max_size)
                 metrics = {'hyp_f1': f1,
                            'hyp_accuracy': hyp_accuracy,
                            'hyp_precision': hyp_precision,
