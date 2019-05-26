@@ -71,6 +71,10 @@ class ArgumentParserHelper():
                             help='The maximum size used for dynamically batching from hyperpartisan dataset')
         parser.add_argument('--include_article_features', action='store_true',
                             help='Whether to append handcrafted article features to the hyperpartisan fc layer')
+        parser.add_argument('--load_pretrained', action='store_true',
+                            help='Whether a pre-trained model on the snli task should be loaded for the sentence encoder')
+        parser.add_argument('--pretrained_path', type=str,
+                            help="Path to the pretrained model on the snli")
 
         config = parser.parse_args()
 
@@ -108,6 +112,8 @@ class ArgumentParserHelper():
         self._concat_glove: bool = config.concat_glove
         self._hyperpartisan_batch_max_size: int = config.hyperpartisan_batch_max_size
         self._include_article_features: bool = config.include_article_features
+        self._load_pretrained: bool = config.load_pretrained
+        self._pretrained_path: bool = config.pretrained_path
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
@@ -133,7 +139,9 @@ class ArgumentParserHelper():
               f'elmo_model: {self._elmo_model}\n' +
               f'concat_glove: {self._concat_glove}\n' +
               f'hyperpartisan_batch_max_size: {self._hyperpartisan_batch_max_size}\n' +
-              f'include_article_features: {self._include_article_features}\n')
+              f'include_article_features: {self._include_article_features}\n' +
+              f'load_pretrained: {self._load_pretrained}\n' +
+              f'pretrained_path: {self._pretrained_path}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -258,3 +266,12 @@ class ArgumentParserHelper():
     @property
     def include_article_features(self) -> bool:
         return self._include_article_features
+
+    @property
+    def load_pretrained(self) -> bool:
+        return self._load_pretrained
+
+    @property
+    def pretrained_path(self) -> str:
+        return self._pretrained_path
+    

@@ -123,3 +123,15 @@ class JointModel(nn.Module):
     def _forward_metaphor(self, x, len_x):
         out = self.sentence_encoder(x, len_x, TrainingMode.Metaphor)
         return out
+
+    def load_my_state_dict(self, state_dict):
+     
+        own_state = self.state_dict()
+        for name, param in state_dict.items():
+
+            name = "sentence_" + name
+            if name not in own_state:
+                 continue
+
+            param = param.data
+            own_state[name].copy_(param)

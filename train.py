@@ -68,6 +68,11 @@ def initialize_model(
             start_epoch = checkpoint['epoch'] + 1
 
         print('Found previous model state')
+    elif argument_parser.load_pretrained and os.path.isfile(argument_parser.pretrained_path):
+        snli_checkpoint = torch.load(argument_parser.pretrained_path)
+        joint_model.load_my_state_dict(snli_checkpoint['model_state_dict'])
+
+        print("Loaded pre-trained sentence encoder")
     else:
         print('Loading model state...Done')
 
