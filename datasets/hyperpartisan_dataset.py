@@ -115,8 +115,6 @@ class HyperpartisanDataset(data.Dataset):
 
 		assert len(body_tokens_per_sentence) == body_sentences_amount
 
-		# print(len(result_embeddings), len(is_hyperpartisan), len(body_tokens_per_sentence), len(body_sentences_amount), len(extra_feat))
-
 		return result_embeddings, is_hyperpartisan, body_tokens_per_sentence, body_sentences_amount, extra_feat, ids
 
 	def __len__(self):

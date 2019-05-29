@@ -35,7 +35,7 @@ class JointModel(nn.Module):
             doc_encoder_dim, doc_encoder_hidden_dim, doc_encoder_dropout_rate, device, doc_encoder_model, pre_attn_layer)
 
         n_extra = 11
-        print("Number of Document lvl fetures: {}".format(n_extra))
+
         self.include_article_features = include_article_features
         if include_article_features:
             hyp_fc_input_dim = 2 * doc_encoder_hidden_dim + n_extra
