@@ -6,14 +6,23 @@ import math
 
 class DocumentEncoder(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, dropout_rate, device):
+    def __init__(self, input_dim, hidden_dim, dropout_rate, device, encoder_model, pre_attn_layer):
         super(DocumentEncoder, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.encoder = nn.LSTM(input_dim, hidden_dim, bidirectional=True, batch_first=True)
-        self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
-                                      nn.Linear(2 * hidden_dim, 2 * hidden_dim),
-                                      nn.Tanh())
+
+        if encoder_model == "GRU":
+            self.encoder = nn.GRU(input_dim, hidden_dim, bidirectional=True, batch_first=True)
+        else:
+            self.encoder = nn.LSTM(input_dim, hidden_dim, bidirectional=True, batch_first=True)
+
+        if pre_attn_layer:
+            self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
+                                          nn.Linear(2 * hidden_dim, 2 * hidden_dim),
+                                          nn.Tanh())
+        else:
+            self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate))
+            
         self.context_vector = nn.Parameter(torch.randn((2 * hidden_dim, 1)))
         stdv = 1. / math.sqrt(self.context_vector.size(0))
         self.context_vector.data.normal_(mean=0, std=stdv)

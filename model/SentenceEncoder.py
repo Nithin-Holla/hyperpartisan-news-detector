@@ -7,7 +7,7 @@ import math
 
 class SentenceEncoder(nn.Module):
 
-    def __init__(self, embedding_dim, hidden_dim, num_layers, dropout_rate, device, skip_connection):
+    def __init__(self, embedding_dim, hidden_dim, num_layers, dropout_rate, device, skip_connection, pre_attn_layer):
         super(SentenceEncoder, self).__init__()
 
         self.embedding_dim = embedding_dim
@@ -18,9 +18,14 @@ class SentenceEncoder(nn.Module):
             pre_attn_input_dim = 2 * hidden_dim + embedding_dim
         else:
             pre_attn_input_dim = 2 * hidden_dim
-        self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
-                                      nn.Linear(pre_attn_input_dim, 2 * hidden_dim),
-                                      nn.Tanh())
+
+        if pre_attn_layer:
+            self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate),
+                                          nn.Linear(pre_attn_input_dim, 2 * hidden_dim),
+                                          nn.Tanh())
+        else:
+            self.pre_attn = nn.Sequential(nn.Dropout(p=dropout_rate))
+            
         self.context_vector = nn.Parameter(torch.randn((2 * hidden_dim, 1)))
         stdv = 1. / math.sqrt(self.context_vector.size(0))
         self.context_vector.data.normal_(mean=0, std=stdv)

@@ -5,6 +5,7 @@ from torch.optim import Optimizer
 from torch.nn import Module
 from torchtext.vocab import Vectors
 
+import numpy as np
 import os
 
 from batches.hyperpartisan_batch import HyperpartisanBatch
@@ -46,16 +47,18 @@ def initialize_model(
         total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
 
     joint_model = JointModel(embedding_dim=total_embedding_dim,
-                             hidden_dim=argument_parser.hidden_dim,
+                             sent_encoder_hidden_dim=argument_parser.sent_encoder_hidden_dim,
+                             doc_encoder_hidden_dim=argument_parser.doc_encoder_hidden_dim,
                              num_layers=argument_parser.num_layers,
                              sent_encoder_dropout_rate=argument_parser.sent_encoder_dropout_rate,
                              doc_encoder_dropout_rate=argument_parser.doc_encoder_dropout_rate,
                              output_dropout_rate=argument_parser.output_dropout_rate,
                              device=device,
                              skip_connection=argument_parser.skip_connection,
-                             include_article_features=argument_parser.include_article_features).to(device)
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, joint_model.parameters()),
-                           lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
+                             include_article_features=argument_parser.include_article_features,
+                             doc_encoder_model=argument_parser.document_encoder_model,
+                             pre_attn_layer=argument_parser.pre_attention_layer
+                             ).to(device)
 
     # Load the checkpoint if found
     start_epoch = 1
@@ -72,10 +75,37 @@ def initialize_model(
         snli_checkpoint = torch.load(argument_parser.pretrained_path)
         joint_model.load_my_state_dict(snli_checkpoint['model_state_dict'])
 
+        if argument_parser.freeze_sentence_encoder:
+            for name, p in joint_model.named_parameters():
+                if "sentence_encoder" in name:
+                    p.requires_grad = False
+
         print("Loaded pre-trained sentence encoder")
     else:
         print('Loading model state...Done')
 
+
+    if argument_parser.per_layer_config:
+
+        sentence_enc_weights = [p for n, p in joint_model.sentence_encoder.encoder.named_parameters() if (p.requires_grad and "weight" in n)]
+        document_enc_weights = [p for n, p in joint_model.document_encoder.encoder.named_parameters() if (p.requires_grad and "weight" in n)]
+        classifer_weights = [p for n, p in joint_model.named_parameters() if (p.requires_grad and ("weight" in n) and ("fc" in n))]
+        context_and_biases = [p for n, p in joint_model.named_parameters() if (p.requires_grad and (("bias" in n) or ("context" in n)))]
+
+        assert len(sentence_enc_weights) + len(document_enc_weights) + len(classifer_weights) + len(context_and_biases) == len([p for p in joint_model.parameters() if p.requires_grad])
+
+        optimizer = optim.Adam([
+                        {"params": sentence_enc_weights, "lr": argument_parser.learning_rate / 10, "weight_decay": argument_parser.weight_decay * 5},
+                        {"params": document_enc_weights, "lr": argument_parser.learning_rate * 10, "weight_decay": 0},
+                        {"params": classifer_weights, "lr": argument_parser.learning_rate, "weight_decay": argument_parser.weight_decay},
+                        {"params": context_and_biases, "lr": argument_parser.learning_rate, "weight_decay": .0}
+                        ])
+
+    else:
+
+        optimizer = optim.Adam([{"params": [p for p in joint_model.parameters() if p.requires_grad]}],
+                                lr=argument_parser.learning_rate, weight_decay=argument_parser.weight_decay)
+        
     print("Starting training in '%s' mode from epoch %d..." %
           (argument_parser.mode, start_epoch))
 
@@ -101,7 +131,9 @@ def create_hyperpartisan_loaders(
         batch_size=argument_parser.hyperpartisan_batch_size,
         shuffle=True)
 
-    return hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader
+    pos_weight = hyperpartisan_train_dataset.pos_weight
+
+    return hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, pos_weight
 
 def create_metaphor_loaders(
         argument_parser: ArgumentParserHelper,
@@ -116,6 +148,8 @@ def create_metaphor_loaders(
         tokenize_sentences=argument_parser.tokenize,
         only_news=argument_parser.only_news)
 
+    pos_weight = metaphor_train_dataset.pos_weight
+
     metaphor_train_dataloader, metaphor_validation_dataloader, _ = DataHelper.create_dataloaders(
         train_dataset=metaphor_train_dataset,
         validation_dataset=metaphor_validation_dataset,
@@ -123,7 +157,7 @@ def create_metaphor_loaders(
         batch_size=argument_parser.metaphor_batch_size,
         shuffle=True)
 
-    return metaphor_train_dataloader, metaphor_validation_dataloader
+    return metaphor_train_dataloader, metaphor_validation_dataloader, pos_weight
 
 def iterate_hyperpartisan(
         joint_model: JointModel,
@@ -131,6 +165,9 @@ def iterate_hyperpartisan(
         criterion: Module,
         hyperpartisan_data,
         device: torch.device,
+        step: int,
+        epoch: int,
+        gradient_save_path: str,
         train: bool = False,
         loss_suppress_factor=1):
 
@@ -147,10 +184,14 @@ def iterate_hyperpartisan(
     predictions = joint_model.forward(batch_inputs, (batch_recover_idx,
                                                      batch_num_sent, batch_sent_lengths, batch_feat), task=TrainingMode.Hyperpartisan)
 
-    loss = loss_suppress_factor * criterion.forward(predictions, batch_targets)
+    loss = loss_suppress_factor * criterion(predictions, batch_targets)
 
     if train:
         loss.backward()
+
+        if step == 0:
+           utils_helper.plot_grad_flow(joint_model.named_parameters(), gradient_save_path, epoch, "hyperpartisan")
+
         optimizer.step()
 
     accuracy = utils_helper.calculate_accuracy(predictions, batch_targets)
@@ -165,6 +206,8 @@ def forward_full_hyperpartisan(
         dataloader: DataLoader,
         device: torch.device,
         hyperpartisan_batch_max_size: int,
+        epoch: int,
+        gradient_save_path: str,
         train: bool = False):
 
     all_targets = []
@@ -207,6 +250,9 @@ def forward_full_hyperpartisan(
             criterion=criterion,
             hyperpartisan_data=hyperpartisan_data,
             device=device,
+            step=step,
+            epoch=epoch,
+            gradient_save_path=gradient_save_path,
             train=train)
 
         running_loss += loss
@@ -226,6 +272,9 @@ def iterate_metaphor(
         criterion: Module,
         metaphor_data,
         device: torch.device,
+        epoch: int,
+        step: int,
+        gradient_save_path: str,
         train: bool = False):
     batch_inputs = metaphor_data[0].to(device).float()
     batch_targets = metaphor_data[1].to(device).view(-1).float()
@@ -240,10 +289,14 @@ def iterate_metaphor(
     unpadded_targets = batch_targets[batch_targets != -1]
     unpadded_predictions = predictions.view(-1)[batch_targets != -1]
 
-    loss = criterion.forward(unpadded_predictions, unpadded_targets)
+    loss = criterion(unpadded_predictions, unpadded_targets)
 
     if train:
         loss.backward()
+
+        if step == 0:
+           utils_helper.plot_grad_flow(joint_model.named_parameters(), gradient_save_path, epoch, "metaphor")
+
         optimizer.step()
 
     return unpadded_targets.long().tolist(), unpadded_predictions.round().long().tolist()
@@ -255,6 +308,8 @@ def forward_full_metaphor(
         criterion: Module,
         dataloader: DataLoader,
         device: torch.device,
+        epoch: int,
+        gradient_save_path: str,
         train: bool = False):
 
     all_targets = []
@@ -270,6 +325,9 @@ def forward_full_metaphor(
             criterion=criterion,
             metaphor_data=metaphor_data,
             device=device,
+            epoch=epoch,
+            step=step,
+            gradient_save_path=gradient_save_path,
             train=train)
 
         all_targets.extend(batch_targets)
@@ -289,6 +347,8 @@ def forward_full_joint_batches(
         joint_metaphors_first: bool,
         loss_suppress_factor: float,
         hyperpartisan_batch_max_size: int,
+        epoch: int,
+        gradient_save_path: str,
         train: bool = False):
 
     all_hyperpartisan_targets = []
@@ -330,6 +390,9 @@ def forward_full_joint_batches(
                 criterion=metaphor_criterion,
                 metaphor_data=metaphor_batch,
                 device=device,
+                epoch=epoch,
+                step=step,
+                gradient_save_path=gradient_save_path,
                 train=train)
 
 
@@ -354,6 +417,9 @@ def forward_full_joint_batches(
             criterion=hyperpartisan_criterion,
             hyperpartisan_data=hyperpartisan_data,
             device=device,
+            step=step,
+            epoch=epoch,
+            gradient_save_path=gradient_save_path,
             train=train,
             loss_suppress_factor=loss_suppress_factor)
 
@@ -370,6 +436,9 @@ def forward_full_joint_batches(
                 criterion=metaphor_criterion,
                 metaphor_data=metaphor_batch,
                 device=device,
+                epoch=epoch,
+                step=step,
+                gradient_save_path=gradient_save_path,
                 train=train)
 
     final_loss = running_hyperpartisan_loss / batch_counter
@@ -388,6 +457,7 @@ def train_and_eval_hyperpartisan(
         best_f1_score: int,
         summary_writer: SummaryWriter,
         epoch: int,
+        gradient_save_path: str,
         hyperpartisan_batch_max_size: int):
 
     joint_model.train()
@@ -398,6 +468,8 @@ def train_and_eval_hyperpartisan(
                                                                   dataloader=hyperpartisan_train_dataloader,
                                                                   device=device,
                                                                   hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
+                                                                  epoch=epoch,
+                                                                  gradient_save_path=gradient_save_path,
                                                                   train=True)
 
     joint_model.eval()
@@ -407,6 +479,8 @@ def train_and_eval_hyperpartisan(
                                                                                               criterion=hyperpartisan_criterion,
                                                                                               dataloader=hyperpartisan_validation_dataloader,
                                                                                               hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
+                                                                                              epoch=epoch,
+                                                                                              gradient_save_path=gradient_save_path,
                                                                                               device=device)
 
     f1, precision, recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
@@ -444,7 +518,8 @@ def train_and_eval_metaphor(
         metaphor_validation_dataloader: DataLoader,
         device: torch.device,
         best_f1_score: int,
-        epoch: int):
+        epoch: int,
+        gradient_save_path: str):
 
     joint_model.train()
     forward_full_metaphor(
@@ -453,6 +528,8 @@ def train_and_eval_metaphor(
         criterion=metaphor_criterion,
         dataloader=metaphor_train_dataloader,
         device=device,
+        epoch=epoch,
+        gradient_save_path=gradient_save_path,
         train=True)
 
     joint_model.eval()
@@ -461,6 +538,8 @@ def train_and_eval_metaphor(
         optimizer=None,
         criterion=metaphor_criterion,
         dataloader=metaphor_validation_dataloader,
+        epoch=epoch,
+        gradient_save_path=gradient_save_path,
         device=device)
 
     f1, _, _ = utils_helper.calculate_metrics(val_targets, val_predictions)
@@ -484,7 +563,8 @@ def train_and_eval_joint(
         loss_suppress_factor: float,
         summary_writer: SummaryWriter,
         best_hyperpartisan_f1_score: bool,
-        hyperpartisan_batch_max_size: int):
+        hyperpartisan_batch_max_size: int,
+        gradient_save_path: str):
 
     # Train
     joint_model.train()
@@ -500,6 +580,8 @@ def train_and_eval_joint(
         loss_suppress_factor=loss_suppress_factor,
         joint_metaphors_first=joint_metaphors_first,
         hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
+        epoch=epoch,
+        gradient_save_path=gradient_save_path,
         train=True)
 
     # Evaluate
@@ -513,6 +595,8 @@ def train_and_eval_joint(
         optimizer=None,
         criterion=metaphor_criterion,
         dataloader=metaphor_validation_dataloader,
+        epoch=epoch,
+        gradient_save_path=gradient_save_path,
         device=device)
 
     metaphor_f1, _, _ = utils_helper.calculate_metrics(val_targets, val_predictions)
@@ -527,6 +611,8 @@ def train_and_eval_joint(
         criterion=hyperpartisan_criterion,
         dataloader=hyperpartisan_validation_dataloader,
         hyperpartisan_batch_max_size=hyperpartisan_batch_max_size,
+        epoch=epoch,
+        gradient_save_path=gradient_save_path,
         device=device)
 
     hyperpartisan_f1, hyperpartisan_precision, hyperpartisan_recall = utils_helper.calculate_metrics(valid_targets, valid_predictions)
@@ -667,23 +753,41 @@ def train_model(argument_parser: ArgumentParserHelper):
     summary_writer = SummaryWriter(
         f'runs/exp-{argument_parser.mode}-odr_{argument_parser.output_dropout_rate}-lr_{argument_parser.learning_rate}-wd_{argument_parser.weight_decay}-lsf_{argument_parser.loss_suppress_factor}')
     
-    metaphor_criterion = nn.BCELoss()
-    hyperpartisan_criterion = nn.BCELoss()
-
     # Load hyperpartisan data
     if TrainingMode.contains_hyperpartisan(argument_parser.mode):
-        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader = create_hyperpartisan_loaders(
+        hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, hyperpartisan_pos_weight = create_hyperpartisan_loaders(
             argument_parser, glove_vectors)
 
     # Load metaphor data
     if TrainingMode.contains_metaphor(argument_parser.mode):
-        metaphor_train_dataloader, metaphor_validation_dataloader = create_metaphor_loaders(
+        metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_pos_weight = create_metaphor_loaders(
             argument_parser, glove_vectors)
+
+    if argument_parser.class_weights:
+        if TrainingMode.contains_metaphor(argument_parser.mode):
+            print("Setting up metaphor loss with positive weight {}".format(metaphor_pos_weight))
+            metaphor_criterion = nn.BCEWithLogitsLoss(pos_weight = torch.ones([1]) * metaphor_pos_weight).to(device)
+        if TrainingMode.contains_hyperpartisan(argument_parser.mode):
+            print("Setting up hyperpartisan loss with positive weight {}".format(hyperpartisan_pos_weight))
+            hyperpartisan_criterion = nn.BCEWithLogitsLoss(pos_weight = torch.ones([1]) * hyperpartisan_pos_weight).to(device)
+    else:
+        metaphor_criterion = nn.BCEWithLogitsLoss()
+        hyperpartisan_criterion = nn.BCEWithLogitsLoss()
 
     tic = time.process_time()
 
     best_f1 = .0
     best_metrics = {}
+    stop_counter = 0
+
+    # folder for storing gradient flow graphs
+    if "gradients" not in os.listdir():
+        os.mkdir("gradients")
+    gradient_save_path = "odr_{}-lr_{}-wd_{}-size_{}/".format(argument_parser.output_dropout_rate, argument_parser.learning_rate, argument_parser.weight_decay, argument_parser.doc_encoder_hidden_dim)
+    try:
+        os.mkdir("gradients/" + gradient_save_path)
+    except:
+        pass
 
     for epoch in range(start_epoch, argument_parser.max_epochs + 1):
         # Joint mode by batches
@@ -703,7 +807,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                 loss_suppress_factor=argument_parser.loss_suppress_factor,
                 summary_writer=summary_writer,
                 best_hyperpartisan_f1_score=best_f1,
-                hyperpartisan_batch_max_size=argument_parser.hyperpartisan_batch_max_size)
+                hyperpartisan_batch_max_size=argument_parser.hyperpartisan_batch_max_size,
+                gradient_save_path=gradient_save_path)
 
             metrics = {'hyp_f1': f1,
                        'hyp_accuracy': hyp_accuracy,
@@ -723,7 +828,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                     metaphor_validation_dataloader=metaphor_validation_dataloader,
                     device=device,
                     best_f1_score=best_f1,
-                    epoch=epoch)
+                    epoch=epoch,
+                    gradient_save_path=gradient_save_path)
                 metrics = {'hyp_f1': 'NA',
                            'hyp_accuracy': 'NA',
                            'hyp_precision': 'NA',
@@ -742,7 +848,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                     best_f1_score=best_f1,
                     epoch=epoch,
                     summary_writer=summary_writer,
-                    hyperpartisan_batch_max_size=argument_parser.hyperpartisan_batch_max_size)
+                    hyperpartisan_batch_max_size=argument_parser.hyperpartisan_batch_max_size,
+                    gradient_save_path=gradient_save_path)
                 metrics = {'hyp_f1': f1,
                            'hyp_accuracy': hyp_accuracy,
                            'hyp_precision': hyp_precision,
@@ -759,7 +866,8 @@ def train_model(argument_parser: ArgumentParserHelper):
                     metaphor_validation_dataloader=metaphor_validation_dataloader,
                     device=device,
                     best_f1_score=best_f1,
-                    epoch=epoch)
+                    epoch=epoch,
+                    gradient_save_path=gradient_save_path)
                 metrics = {'hyp_f1': 'NA',
                            'hyp_accuracy': 'NA',
                            'hyp_precision': 'NA',

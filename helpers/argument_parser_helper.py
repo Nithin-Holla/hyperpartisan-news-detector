@@ -26,7 +26,7 @@ class ArgumentParserHelper():
                             help='Batch size for training on the hyperpartisan dataset')
         parser.add_argument('--metaphor_batch_size', type=int, default=Constants.DEFAULT_METAPHOR_BATCH_SIZE,
                             help='Batch size for training on the metaphor dataset')
-        parser.add_argument('--hidden_dim', type=int, default=Constants.DEFAULT_HIDDEN_DIMENSION,
+        parser.add_argument('--sent_encoder_hidden_dim', type=int, default=Constants.DEFAULT_HIDDEN_DIMENSION,
                             help='Hidden dimension of the recurrent network')
         parser.add_argument('--glove_size', type=int,
                             help='Number of GloVe vectors to load initially')
@@ -75,6 +75,18 @@ class ArgumentParserHelper():
                             help='Whether a pre-trained model on the snli task should be loaded for the sentence encoder')
         parser.add_argument('--pretrained_path', type=str,
                             help="Path to the pretrained model on the snli")
+        parser.add_argument('--freeze_sentence_encoder', action="store_true",
+                            help="whether to keep the sentence encoder fixed (no gradients)")
+        parser.add_argument('--doc_encoder_hidden_dim', type=int, default=Constants.DEFAULT_DOC_ENCODER_DIM,
+                            help='Hidden dimension size of document encoder')
+        parser.add_argument('--class_weights', action='store_true',
+                            help='wether to use class weighting in the cross entropy loss')
+        parser.add_argument('--document_encoder_model', type=str, choices=["LSTM", "GRU"], default=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                            help='type of encoder to be used in DocumentEncoder')
+        parser.add_argument('--pre_attention_layer', action='store_true',
+                            help='wether to use a fully connected layer before applying the attention in both encoders')
+        parser.add_argument('--per_layer_config', action='store_true',
+                            help='wether to use different learning rate and weight decay depending on the parameters')
 
         config = parser.parse_args()
 
@@ -89,7 +101,7 @@ class ArgumentParserHelper():
         self._max_epochs: int = config.max_epochs
         self._hyperpartisan_batch_size: int = config.hyperpartisan_batch_size 
         self._metaphor_batch_size: int = config.metaphor_batch_size
-        self._hidden_dim: int = config.hidden_dim
+        self._sent_encoder_hidden_dim: int = config.sent_encoder_hidden_dim
         self._glove_size: int = config.glove_size
         self._weight_decay: float = config.weight_decay
         self._metaphor_dataset_folder: str = config.metaphor_dataset_folder
@@ -114,13 +126,19 @@ class ArgumentParserHelper():
         self._include_article_features: bool = config.include_article_features
         self._load_pretrained: bool = config.load_pretrained
         self._pretrained_path: bool = config.pretrained_path
+        self._freeze_sentence_encoder: bool = config.freeze_sentence_encoder
+        self._doc_encoder_hidden_dim: int = config.doc_encoder_hidden_dim
+        self._class_weights: bool = config.class_weights
+        self._document_encoder_model: str = config.document_encoder_model
+        self._pre_attention_layer: bool = config.pre_attention_layer
+        self._per_layer_config: bool = config.per_layer_config
 
     def print_unique_arguments(self):
         print(f'learning_rate: {self._learning_rate}\n' + 
               f'max_epochs: {self._max_epochs}\n' + 
               f'hyper_batch_size: {self._hyperpartisan_batch_size}\n' + 
               f'metaphor_batch_size: {self._metaphor_batch_size}\n' + 
-              f'hidden_dim: {self._hidden_dim}\n' + 
+              f'sent_encoder_hidden_dim: {self._sent_encoder_hidden_dim}\n' + 
               f'glove_size: {self._glove_size}\n' + 
               f'weight_decay: {self._weight_decay}\n' + 
               f'mode: {self._mode}\n' + 
@@ -141,7 +159,13 @@ class ArgumentParserHelper():
               f'hyperpartisan_batch_max_size: {self._hyperpartisan_batch_max_size}\n' +
               f'include_article_features: {self._include_article_features}\n' +
               f'load_pretrained: {self._load_pretrained}\n' +
-              f'pretrained_path: {self._pretrained_path}\n')
+              f'pretrained_path: {self._pretrained_path}\n' +
+              f'freeze_sentence_encoder: {self._freeze_sentence_encoder}\n' +
+              f'doc_encoder_hidden_dim: {self._doc_encoder_hidden_dim}\n' +
+              f'class_weights: {self._class_weights}\n' +
+              f'document_encoder_model: {self._document_encoder_model}\n' +
+              f'pre_attention_layer: {self.pre_attention_layer}\n' +
+              f'per_layer_config: {self.per_layer_config}\n')
 
     @property
     def model_checkpoint(self) -> str:
@@ -176,8 +200,8 @@ class ArgumentParserHelper():
         return self._metaphor_batch_size
 
     @property
-    def hidden_dim(self) -> int:
-        return self._hidden_dim
+    def sent_encoder_hidden_dim(self) -> int:
+        return self._sent_encoder_hidden_dim
 
     @property
     def glove_size(self) -> int:
@@ -274,4 +298,31 @@ class ArgumentParserHelper():
     @property
     def pretrained_path(self) -> str:
         return self._pretrained_path
+
+    @property
+    def freeze_sentence_encoder(self) -> bool:
+        return self._freeze_sentence_encoder
+
+    @property
+    def doc_encoder_hidden_dim(self) -> int:
+        return self._doc_encoder_hidden_dim
+
+    @property
+    def class_weights(self) -> bool:
+        return self._class_weights
+
+    @property
+    def document_encoder_model(self) -> str:
+        return self._document_encoder_model
+    
+    @property
+    def pre_attention_layer(self) -> bool:
+        return self._pre_attention_layer
+    
+    @property
+    def per_layer_config(self) -> bool:
+        return self._per_layer_config
+    
+    
+    
     

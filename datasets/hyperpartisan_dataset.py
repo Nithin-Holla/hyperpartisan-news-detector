@@ -35,6 +35,8 @@ class HyperpartisanDataset(data.Dataset):
 		self._labels, self._title_tokens, self._body_tokens, self._extra_feat, self._ids = self._parse_csv_file(
 			filename)
 
+		self.pos_weight = 1 / np.mean(self._labels)
+
 		self.article_indexes = {}
 		start_index = 0
 
@@ -128,18 +130,12 @@ class HyperpartisanDataset(data.Dataset):
 		:param str filename: the path to the metaphor CSV dataset file
 		:return: list of all sentences, list of their labels, dictionary of all the word representations and vocabulary with all the unique words
 		'''
+
 		labels = []
 		title_tokens = []
 		body_tokens = []
 		ids = []
 		extra_feat = []
-
-		month_dict = {}
-		for month in range(12):
-			z = np.zeros(12)
-			z[month] = 1
-			z = list(z)
-			month_dict[month] = z
 
 		with open(filename, 'r', encoding="utf-8") as csv_file:
 			next(csv_file)
@@ -150,39 +146,22 @@ class HyperpartisanDataset(data.Dataset):
 
 				ids.append(row[0])
 				
-				date = row[1]
-				try:
-					y = int(date[:4])
-					m = int(date[5:7])
+				xtr = []
 
-					if y == 2018:
-						xtr = [0, 0, 0, 1]
-					elif y == 2017:
-						xtr = [0, 0, 1, 0]
-					elif y == 2016:
-						xtr = [0, 1, 0, 0]
-					else:
-						xtr = [0, 0, 0, 0]
-
-					xtr += month_dict[m]
-				except:
-					xtr = [0]*16
-
-				xtr.append(float(row[-2]))
-				xtr.append(float(row[-1]))
-
-				extra_feat.append(xtr)
+				for i in range(1, 12):
+					xtr.append(float(row[-i]))
 
 				labels.append(int(row[4] == "True"))
-				current_title_tokens = literal_eval(row[2])
 
+				current_title_tokens = literal_eval(row[2])
 				title_tokens.append(current_title_tokens)
 
 				current_body_tokens = literal_eval(row[3])
-
 				body_tokens.append(current_body_tokens)
 
-				assert len(xtr) == 18
+				extra_feat.append(xtr)
+
+				assert len(xtr) == 11
 
 		return labels, title_tokens, body_tokens, extra_feat, ids
 

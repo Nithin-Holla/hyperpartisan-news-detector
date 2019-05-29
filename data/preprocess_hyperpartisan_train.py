@@ -55,14 +55,15 @@ def clean_text(text):
 
 def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopwords):
 
-	columns = ["date", "title_tokens", "body_tokens", "hyperpartisan", "author", "length_in_sent", "length_in_words", 
-		"links_percent", "quotes_percent", "stopwords_percent", "full_caps_percent", "named_entities_percent"]
+	columns = ["date", "title_tokens", "body_tokens", "hyperpartisan", "author", "length_in_par", "length_in_sent", "length_in_words", 
+		"links_percent", "quotes_percent", "stopwords_percent", "full_caps_percent", "named_entities_percent",
+		"min_sent_length", "mean_sent_length", "max_sent_length"]
 	df = pd.DataFrame(columns = columns)
 
 	body_tags = ["p", "a", "q"]
 
 	stopwords = init_stopwords()
-	re_num_simple = re.compile('^-?[0-9.,]+([eE^][0-9]+)?(th)?$')
+	# re_num_simple = re.compile('^-?[0-9.,]+([eE^][0-9]+)?(th)?$')
 
 	# create iterators
 	article_iter = ET.iterparse(data_path + xml_file_articles, events = ("start", "end"))
@@ -83,16 +84,18 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 					Date = np.nan
 					
 				Title = clean_text(article_elem.attrib["title"])
-				Title_tokens = [token for token in word_tokenize(Title) if token not in stopwords ]
+				Title_tokens = word_tokenize(Title)
 				L = len(Title_tokens)
+
+				n_stopwords = sum([1 for token in Title_tokens if token in stopwords])
 
 				n_links = 0
 				n_quotes = 0
 				n_all = 0
 				n_caps = 0
 				n_names = 0
+				n_paragraphs = 0
 
-				Title_tokens = [re_num_simple.sub("<num>", token) for token in Title_tokens]
 				for i, token in enumerate(Title_tokens):
 					if token.isupper():
 						n_caps += 1
@@ -101,7 +104,6 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 
 				Body = ""
 
-				
 			# finalize this article and append it to the parent dataframe
 			else:
 								
@@ -114,9 +116,13 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 				Body_sent_tokens = sent_tokenize(Body)
 				L += sum([len(word_tokenize(s)) for s in Body_sent_tokens])
 
-				Body_tokens = [[token for token in word_tokenize(sent) if token not in stopwords] for sent in Body_sent_tokens]
+				Body_tokens = [[token for token in word_tokenize(sent)] for sent in Body_sent_tokens]
+				n_stopwords += sum([sum([1 for token in sent if token in stopwords]) for sent in Body_sent_tokens])
+				sentence_lengths = [len(sent) for sent in Body_sent_tokens]
 
-				Body_tokens = [[re_num_simple.sub("<num>", token) for token in sent] for sent in Body_tokens]
+				min_sent_length = min(sentence_lengths)
+				mean_sent_length = sum(sentence_lengths) / len(Body_sent_tokens)
+				max_sent_length = max(sentence_lengths)
 
 				for sent in Body_tokens:
 					for i, token in enumerate(sent):
@@ -129,9 +135,10 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 				Length_in_sent = len(Body_sent_tokens)
 				Length_in_words = sum(len(sent) for sent in Body_sent_tokens)
 
-				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, Length_in_sent, Length_in_words,
-										n_links/n_all, n_quotes/n_all, L/(Title_length + Length_in_words), n_caps/(Title_length + Length_in_words),
-										n_names/(Title_length + Length_in_words)]], index = [Id], columns = columns)
+				df_elem = pd.DataFrame([[Date, Title_tokens, Body_tokens, Hyperpartisan, Author, n_paragraphs, Length_in_sent, Length_in_words,
+										n_links/n_all, n_quotes/n_all, n_stopwords/(Title_length + Length_in_words), n_caps/(Title_length + Length_in_words),
+										n_names/(Title_length + Length_in_words), min_sent_length, mean_sent_length, max_sent_length]],
+										index = [Id], columns = columns)
 				df = df.append(df_elem)
 			
 		# append this text to the article body	
@@ -143,6 +150,8 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 					n_links += 1
 				if article_elem.tag == "q":
 					n_quotes += 1
+				else:
+					n_paragraphs += 1
 				n_all += 1
 
 				if article_elem.text is not None:
@@ -203,6 +212,22 @@ def split_dataset(df, valid_size):
 
 	return df_train, df_valid
 
+
+def standardize_df(df1, df2):
+
+	df = pd.concat([df1, df2], axis = 0)
+
+	mean_df1 = df1.iloc[:, 5:].mean(axis = 0).values
+	std_df1 = df1.iloc[:, 5:].std(axis = 0).values
+
+	mean_df = df.iloc[:, 5:].mean(axis = 0).values
+	std_df = df.iloc[:, 5:].std(axis = 0).values
+
+	df1.iloc[:, 5:] = (df1.iloc[:, 5:] - mean_df1) / std_df1
+	df2.iloc[:, 5:] = (df2.iloc[:, 5:] - mean_df) / std_df
+
+	return df1, df2
+
 valid_size = 128
 data_path = "C:/Users/ioann/Datasets/Hyperpartisan/"
 xml_file_articles = "articles-training-byarticle-20181122.xml"
@@ -218,5 +243,7 @@ print(len(set(df_train.author.tolist()).intersection(set(df_valid.author.tolist(
 # df_train = df_train.sort_values("length_in_sent")
 # df_valid = df_valid.sort_values("length_in_sent")
 
-df_train.to_csv(data_path + "train_byart_reduced.txt", sep = "\t")
-df_valid.to_csv(data_path + "valid_byart_reduced.txt", sep = "\t")
+df_train, df_valid = standardize_df(df_train, df_valid)
+
+df_train.to_csv(data_path + "train_byart_new.txt", sep = "\t")
+df_valid.to_csv(data_path + "valid_byart_new.txt", sep = "\t")

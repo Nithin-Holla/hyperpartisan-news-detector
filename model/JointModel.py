@@ -12,32 +12,37 @@ class JointModel(nn.Module):
     def __init__(
             self,
             embedding_dim,
-            hidden_dim,
+            sent_encoder_hidden_dim,
+            doc_encoder_hidden_dim,
             num_layers,
             sent_encoder_dropout_rate,
             doc_encoder_dropout_rate,
             output_dropout_rate,
             device,
             skip_connection,
-            include_article_features):
+            include_article_features,
+            doc_encoder_model,
+            pre_attn_layer):
 
         super(JointModel, self).__init__()
         self.sentence_encoder = SentenceEncoder(
-            embedding_dim, hidden_dim, num_layers, sent_encoder_dropout_rate, device, skip_connection)
+            embedding_dim, sent_encoder_hidden_dim, num_layers, sent_encoder_dropout_rate, device, skip_connection, pre_attn_layer)
         if skip_connection:
-            doc_encoder_dim = 2 * hidden_dim + embedding_dim
+            doc_encoder_dim = 2 * sent_encoder_hidden_dim + embedding_dim
         else:
-            doc_encoder_dim = 2 * hidden_dim
+            doc_encoder_dim = 2 * sent_encoder_hidden_dim
         self.document_encoder = DocumentEncoder(
-            doc_encoder_dim, hidden_dim, doc_encoder_dropout_rate, device)
+            doc_encoder_dim, doc_encoder_hidden_dim, doc_encoder_dropout_rate, device, doc_encoder_model, pre_attn_layer)
 
+        n_extra = 11
+        print("Number of Document lvl fetures: {}".format(n_extra))
         self.include_article_features = include_article_features
         if include_article_features:
-            hyp_fc_input_dim = 2 * hidden_dim + 18
+            hyp_fc_input_dim = 2 * doc_encoder_hidden_dim + n_extra
         else:
-            hyp_fc_input_dim = 2 * hidden_dim
+            hyp_fc_input_dim = 2 * doc_encoder_hidden_dim
 
-        self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p = output_dropout_rate),
+        self.hyperpartisan_fc = nn.Sequential(nn.Dropout(p  = output_dropout_rate),
                                               nn.Linear(hyp_fc_input_dim, 1),
                                               nn.Sigmoid())
 
@@ -130,8 +135,9 @@ class JointModel(nn.Module):
         for name, param in state_dict.items():
 
             name = "sentence_" + name
-            if name not in own_state:
+            if (name not in own_state) or ("metaphor" in name):
                  continue
 
+            print("Loaded:", name)
             param = param.data
             own_state[name].copy_(param)

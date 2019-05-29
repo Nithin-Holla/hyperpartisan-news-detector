@@ -35,6 +35,8 @@ class MetaphorDataset(data.Dataset):
 
         self._sentences, self._labels = self._parse_csv_file(filename)
 
+        self.pos_weight = 1 / (sum([sum([label for label in labels]) for labels in self._labels]) / sum([sum([1 for label in labels]) for labels in self._labels]))
+
         self.elmo_filename = self._assert_elmo_vectors_file(
             filename, self._sentences)
 
