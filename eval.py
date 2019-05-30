@@ -129,7 +129,7 @@ def iterate_metaphor(model, metaphor_data, device):
 	metaphorical = []
 	for i, sent in enumerate(predictions):
 		sent = [int(p > 0.5) for p in sent[:batch_lengths[i].item()]]
-		metaphorical.append(int(sum(sent) > 1))
+		metaphorical.append(int(sum(sent) > 0))
 	metaphorical = sum(metaphorical)/len(metaphorical)
 
 	return metaphorical
@@ -216,7 +216,7 @@ def eval_model(argument_parser):
 			predictions, ids = forward_full_hyperpartisan(model, hyperpartisan_test_dataloader, device, argument_parser.output)
 
 		if argument_parser.output == "predictions":
-			with open("model_output/pred_{}_nopre.txt".format(argument_parser.mode), "w") as f:
+			with open("model_output/pred_{}.txt".format(argument_parser.mode), "w") as f:
 				for Id, prediction in zip(ids, predictions):
 					f.write(Id + " " + str(prediction == 1) + "\n")
 		else:
