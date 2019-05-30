@@ -10,14 +10,16 @@ import numpy as np
 
 import sys
 
+from batches.hyperpartisan_batch import HyperpartisanBatch
+
 sys.path.append('..')
 
 from enums.elmo_model import ELMoModel
 from model.JointModel import JointModel
+from model.Ensemble import Ensemble
 from helpers.utils_helper import UtilsHelper
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 from helpers.hyperpartisan_loader import HyperpartisanLoader
-from datasets.hyperpartisan_dataset import HyperpartisanDataset
 
 from constants import Constants
 from enums.training_mode import TrainingMode
@@ -25,11 +27,11 @@ from enums.training_mode import TrainingMode
 utils_helper = UtilsHelper()
 
 
-def load_model_state(model, model_checkpoint_path):
+def load_model_state(model, model_checkpoint_path, device):
     if not os.path.isfile(model_checkpoint_path):
         raise Exception('Model checkpoint path is invalid')
 
-    checkpoint = torch.load(model_checkpoint_path)
+    checkpoint = torch.load(model_checkpoint_path, map_location=device)
     if not checkpoint['model_state_dict']:
         raise Exception('Model state dictionary checkpoint not found')
 
@@ -42,7 +44,7 @@ def initialize_models(
         device: torch.device,
         elmo_model: ELMoModel,
         concat_glove: bool,
-        glove_vectors_dim: int):
+        model_type: str):
     print('Loading model state...\r', end='')
 
     if elmo_model == ELMoModel.Original:
@@ -53,28 +55,70 @@ def initialize_models(
     if concat_glove:
         total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
 
-    hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
-                                     hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
-                                     num_layers=Constants.DEFAULT_NUM_LAYERS,
-                                     sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
-                                     doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
-                                     output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
-                                     device=device,
-                                     skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
-                                     include_article_features=config.include_article_features).to(device)
+    if model_type == "ensemble":
 
-    joint_model = JointModel(embedding_dim=total_embedding_dim,
-                             hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
-                             num_layers=Constants.DEFAULT_NUM_LAYERS,
-                             sent_encoder_dropout_rate=Constants.DEFAULT_SENTENCE_ENCODER_DROPOUT_RATE,
-                             doc_encoder_dropout_rate=Constants.DEFAULT_DOCUMENT_ENCODER_DROPOUT_RATE,
-                             output_dropout_rate=Constants.DEFAULT_OUTPUT_ENCODER_DROPOUT_RATE,
-                             device=device,
-                             skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
-                             include_article_features=config.include_article_features).to(device)
+        assert os.path.isdir(joint_model_checkpoint_path)
+        assert os.path.isdir(hyperpartisan_model_checkpoint_path)
 
-    load_model_state(hyperpartisan_model, hyperpartisan_model_checkpoint_path)
-    load_model_state(joint_model, joint_model_checkpoint_path)
+        hyperpartisan_model = Ensemble(path_to_models=hyperpartisan_model_checkpoint_path,
+                                       sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                                       doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                                       num_layers=Constants.DEFAULT_NUM_LAYERS,
+                                       skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                                       include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                                       document_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                                       pre_attention_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER,
+                                       total_embedding_dim=total_embedding_dim,
+                                       device=device
+                                       )
+
+        joint_model = Ensemble(path_to_models=joint_model_checkpoint_path,
+                               sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                               doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                               num_layers=Constants.DEFAULT_NUM_LAYERS,
+                               skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                               include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                               document_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                               pre_attention_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER,
+                               total_embedding_dim=total_embedding_dim,
+                               device=device
+                               )
+
+    else:
+
+        assert os.path.isfile(joint_model_checkpoint_path)
+        assert os.path.isfile(hyperpartisan_model_checkpoint_path)
+
+        hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
+                                         sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                                         doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                                         num_layers=Constants.DEFAULT_NUM_LAYERS,
+                                         sent_encoder_dropout_rate=0.,
+                                         doc_encoder_dropout_rate=0.,
+                                         output_dropout_rate=0.,
+                                         device=device,
+                                         skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                                         include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                                         doc_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                                         pre_attn_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER
+                                         ).to(device)
+
+        joint_model = JointModel(embedding_dim=total_embedding_dim,
+                                 sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                                 doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                                 num_layers=Constants.DEFAULT_NUM_LAYERS,
+                                 sent_encoder_dropout_rate=0.,
+                                 doc_encoder_dropout_rate=0.,
+                                 output_dropout_rate=0.,
+                                 device=device,
+                                 skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                                 include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                                 doc_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                                 pre_attn_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER
+                                 ).to(device)
+
+        load_model_state(hyperpartisan_model, hyperpartisan_model_checkpoint_path, device)
+        load_model_state(joint_model, joint_model_checkpoint_path, device)
 
     print('Loading model state...Done')
 
@@ -91,46 +135,63 @@ def get_interesting_articles(targets, hyp_pred, joint_pred):
     for i in range(len(targets)):
         if targets[i] == 1 and hyp_pred[i] == 0 and joint_pred[i] == 1:
             print(f'{i},', end='')
-            
+
             # print(f'{targets[i]} - {hyp_pred[i]} - {joint_pred[i]}')
     print(']')
 
     return interesting_articles
 
 
-def forward_full_hyperpartisan(
-        joint_model: JointModel,
+def get_predictions(
+        model,
         dataloader: DataLoader,
         device: torch.device):
-    all_targets = []
-    all_predictions = []
-
-    running_accuracy = 0
+    hyp_targets = []
+    hyp_predictions = []
+    metaphor_predictions = []
 
     total_length = len(dataloader)
-    for step, hyperpartisan_data in enumerate(dataloader):
-        print(f'Step {step+1}/{total_length}                  \r', end='')
 
-        batch_inputs = hyperpartisan_data[0].to(device)
-        batch_targets = hyperpartisan_data[1].to(device)
-        batch_recover_idx = hyperpartisan_data[2].to(device)
-        batch_num_sent = hyperpartisan_data[3].to(device)
-        batch_sent_lengths = hyperpartisan_data[4].to(device)
-        batch_feat = hyperpartisan_data[5].to(device)
+    model.eval()
 
-        batch_predictions = joint_model.forward(batch_inputs, (batch_recover_idx,
-                                                               batch_num_sent, batch_sent_lengths, batch_feat),
-                                                task=TrainingMode.Hyperpartisan)
+    with torch.no_grad():
+        for step, hyperpartisan_data in enumerate(dataloader):
+            print(f'Step {step+1}/{total_length}                  \r', end='')
 
-        accuracy = utils_helper.calculate_accuracy(batch_predictions, batch_targets)
+            hyperpartisan_batch = HyperpartisanBatch(1000)  # just something big
+            hyperpartisan_batch.add_data(*hyperpartisan_data[:-1])  # exclude last element (id)
+            hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
 
-        running_accuracy += accuracy
-        all_targets += batch_targets.long().tolist()
-        all_predictions += batch_predictions.round().long().tolist()
+            batch_inputs = hyperpartisan_data[0].to(device)
+            batch_targets = hyperpartisan_data[1].to(device)
+            batch_recover_idx = hyperpartisan_data[2].to(device)
+            batch_num_sent = hyperpartisan_data[3].to(device)
+            batch_sent_lengths = hyperpartisan_data[4].to(device)
+            batch_feat = hyperpartisan_data[5].to(device)
 
-    final_accuracy = running_accuracy / (step + 1)
+            batch_hyp_predictions = model.forward(batch_inputs, (batch_recover_idx,
+                                                                 batch_num_sent, batch_sent_lengths, batch_feat),
+                                                  task=TrainingMode.Hyperpartisan)
+            hyp_targets.append(batch_targets.long().item())
+            hyp_predictions.append(batch_hyp_predictions.round().long().item())
 
-    return final_accuracy, all_targets, all_predictions
+            batch_metaphor_predictions = model.forward(batch_inputs, batch_sent_lengths, task=TrainingMode.Metaphor)
+            batch_metaphor_predictions = batch_metaphor_predictions.round().long()
+            batch_metaphor_predictions = torch.sum(batch_metaphor_predictions) > 0
+            metaphor_predictions.append(batch_metaphor_predictions.long().item())
+
+    return hyp_targets, hyp_predictions, metaphor_predictions
+
+
+def correlation_analysis(model, hyperpartisan_validation_dataloader, device):
+    hyp_targets, hyp_predictions, metaphor_predictions = get_predictions(model, hyperpartisan_validation_dataloader,
+                                                                         device)
+    metaphor_and_hyp = sum([hyp_targets[i] == metaphor_predictions[i] == 1 for i in range(len(hyp_targets))])
+    metaphor_and_non_hyp = sum([hyp_targets[i] == 0 and metaphor_predictions[i] == 1 for i in range(len(hyp_targets))])
+    print('Percentage of hyperpartisan articles that are predicted to contain metaphors: {}'.format(metaphor_and_hyp / len(hyp_targets)))
+    print('Percentage of non-hyperpartisan articles that are predicted to contain metaphors: {}'.format(
+        metaphor_and_non_hyp / len(hyp_targets)))
+    return
 
 
 if __name__ == '__main__':
@@ -151,7 +212,7 @@ if __name__ == '__main__':
                         help='Batch size for training on the hyperpartisan dataset')
     parser.add_argument('--metaphor_batch_size', type=int, default=Constants.DEFAULT_METAPHOR_BATCH_SIZE,
                         help='Batch size for training on the metaphor dataset')
-    parser.add_argument('--deterministic', type=int, required=True,
+    parser.add_argument('--deterministic', type=int,
                         help='The seed to be used when running deterministically. If nothing is passed, the program run will be stochastic')
     parser.add_argument('--alpha_value', type=int, default=0.05,
                         help='The alpha value which will be used to statistically test the significant difference')
@@ -161,12 +222,14 @@ if __name__ == '__main__':
                         help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
     parser.add_argument('--include_article_features', action='store_true',
                         help='Whether to append handcrafted article features to the hyperpartisan fc layer')
+    parser.add_argument('--model_type', type=str, choices=["ensemble", "single"], default="single",
+                        help='Whether to use an ensemble of models or a single model instant')
 
     config = parser.parse_args()
 
     utils_helper.initialize_deterministic_mode(config.deterministic)
 
-    device = torch.device("cuda:0")  # if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if config.concat_glove:
         glove_vectors = utils_helper.load_glove_vectors(
@@ -179,7 +242,7 @@ if __name__ == '__main__':
                                                          device,
                                                          config.elmo_model,
                                                          config.concat_glove,
-                                                         glove_vectors.dim)
+                                                         config.model_type)
 
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,
@@ -195,26 +258,13 @@ if __name__ == '__main__':
         batch_size=config.hyperpartisan_batch_size,
         shuffle=False)
 
-    hyperpartisan_valid_accuracy, hyperpartisan_valid_targets, hyperpartisan_valid_predictions = forward_full_hyperpartisan(
-        joint_model=hyperpartisan_model,
-        dataloader=hyperpartisan_validation_dataloader,
-        device=device)
+    correlation_analysis(joint_model, hyperpartisan_validation_dataloader, device)
 
-    hyperpartisan_f1, _, _ = utils_helper.calculate_metrics(hyperpartisan_valid_targets,
-                                                            hyperpartisan_valid_predictions)
-
-    print(f'Hyperpartisan F1 score: {hyperpartisan_f1}')
-
-    joint_valid_accuracy, joint_valid_targets, joint_valid_predictions = forward_full_hyperpartisan(
-        joint_model=joint_model,
-        dataloader=hyperpartisan_validation_dataloader,
-        device=device)
-
-    interesting_articles = get_interesting_articles(
-        hyperpartisan_valid_targets,
-        hyperpartisan_valid_predictions,
-        joint_valid_predictions)
-
-    interesting_articles += 2
-
-    print("Interesting articles are: {}".format(interesting_articles))
+    # interesting_articles = get_interesting_articles(
+    #     hyperpartisan_valid_targets,
+    #     hyperpartisan_valid_predictions,
+    #     joint_valid_predictions)
+    #
+    # interesting_articles += 2
+    #
+    # print("Interesting articles are: {}".format(interesting_articles))
