@@ -25,6 +25,7 @@ from datasets.hyperpartisan_dataset import HyperpartisanDataset
 from constants import Constants
 from enums.elmo_model import ELMoModel
 from enums.training_mode import TrainingMode
+from enums.significance_test_type import SignificanceTestType
 from batches.hyperpartisan_batch import HyperpartisanBatch
 
 utils_helper = UtilsHelper()
@@ -45,7 +46,6 @@ def initialize_models(
         device: torch.device,
         elmo_model: ELMoModel,
         concat_glove: bool,
-        glove_vectors_dim: int,
         model_type: str):
 
     print('Loading model state...\r', end='')
@@ -140,8 +140,6 @@ def create_contingency_table(targets, predictions1, predictions2):
     contingency_table[1, 0] = sum([targets[i] != predictions1[i] and targets[i] == predictions2[i] for i in range(targets_length)]) # predictions1 is wrong and predictions2 is correct
     contingency_table[1, 1] = sum([targets[i] != predictions1[i] and targets[i] != predictions2[i] for i in range(targets_length)]) # both predictions are wrong
 
-    print(contingency_table)
-
     return contingency_table
 
 def forward_full_hyperpartisan(
@@ -170,10 +168,41 @@ def forward_full_hyperpartisan(
         batch_predictions = model.forward(batch_inputs, (batch_recover_idx,
                                                         batch_num_sent, batch_sent_lengths, batch_feat), task=TrainingMode.Hyperpartisan)
 
+        # this is if we decide to not take the mean but keep all predictions
+        # if isinstance(model, Ensemble):
+        #     for _ in range(model.models_count):
+        #         all_targets.append(batch_targets.long().item())
+        # else:
         all_targets.append(batch_targets.long().item())
+            
+        # this is if we decide to not take the mean but keep all predictions
+        # all_predictions.extend([prediction.round().long().item() for prediction in batch_predictions])
         all_predictions.append(batch_predictions.round().long().item())
 
     return all_targets, all_predictions
+
+def calculate_ttest(hyperpartisan_valid_predictions, joint_valid_predictions):
+    _, p_value = ttest_ind(hyperpartisan_valid_predictions, joint_valid_predictions)
+    return p_value
+
+    # print("t2:\t", t2, "p2:\t", p2)
+
+def calculate_mcnemars_test(hyperpartisan_valid_predictions, joint_valid_predictions):
+    contingency_table = create_contingency_table(
+        hyperpartisan_valid_targets,
+        hyperpartisan_valid_predictions,
+        joint_valid_predictions)
+    
+    result = mcnemar(contingency_table, exact=True)
+    return result.pvalue
+
+def calculate_permutation_test(hyperpartisan_valid_predictions, joint_valid_predictions):
+    p_value = permutation_test(hyperpartisan_valid_predictions, joint_valid_predictions,
+                           method='approximate',
+                           num_rounds=10000,
+                           seed=0)
+
+    return p_value    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -205,12 +234,14 @@ if __name__ == '__main__':
                         help='Whether to append handcrafted article features to the hyperpartisan fc layer')
     parser.add_argument('--model_type', type=str, choices=["ensemble", "single"], default = "single",
                         help='Whether to use an ensemble of models or a single model instant')
+    parser.add_argument('--significance_test_type', type=SignificanceTestType, choices=list(SignificanceTestType), default=SignificanceTestType.McNemars,
+                        help='Significance test type to be used')
 
     config = parser.parse_args()
 
     utils_helper.initialize_deterministic_mode(config.deterministic)
 
-    device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
+    device = torch.device("cuda:0")# if torch.cuda.is_available() else "cpu")
 
     if config.concat_glove:
         glove_vectors = utils_helper.load_glove_vectors(
@@ -223,7 +254,6 @@ if __name__ == '__main__':
                                                          device,
                                                          config.elmo_model,
                                                          config.concat_glove,
-                                                         glove_vectors.dim,
                                                          config.model_type)
     
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
@@ -250,15 +280,14 @@ if __name__ == '__main__':
 
     print(f'Hyperpartisan F1 score: {hyperpartisan_f1}, Precision: {hyperpartisan_precision}, Recall: {hyperpartisan_recall}, Accuracy: {hyperpartisan_accuracy}')
 
-    # was getting a weird error if the same dataloader was used
-    _, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
+    _, joint_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         validation_dataset=hyperpartisan_validation_dataset,
         batch_size=config.hyperpartisan_batch_size,
         shuffle=False)
 
     joint_valid_targets, joint_valid_predictions = forward_full_hyperpartisan(
         model=joint_model,
-        dataloader=hyperpartisan_validation_dataloader,
+        dataloader=joint_validation_dataloader,
         device=device)
 
     joint_accuracy = accuracy_score(joint_valid_targets, joint_valid_predictions)
@@ -266,44 +295,20 @@ if __name__ == '__main__':
 
     print(f'Joint F1 score: {joint_f1}, Precision: {joint_precision}, Recall: {joint_recall}, Accuracy: {joint_accuracy}')
 
-    print('Calculating p value using McNemar\'s test...\r', end='')
+    print(f'Calculating significance using \'{config.significance_test_type}\' test...\r', end='')
 
-    # roll your own t-test:
-    N=10
-    hyperpartisan_valid_predictions = np.array(hyperpartisan_valid_predictions)
-    joint_valid_predictions = np.array(joint_valid_predictions)
-    var_a = hyperpartisan_valid_predictions.var(ddof=1) # unbiased estimator, divide by N-1 instead of N
-    var_b = joint_valid_predictions.var(ddof=1)
-    s = np.sqrt( (var_a + var_b) / 2 ) # balanced standard deviation
-    t = (hyperpartisan_valid_predictions.mean() - joint_valid_predictions.mean()) / (s * np.sqrt(2.0/N)) # t-statistic
-    df = 2*N - 2 # degrees of freedom
-    p = 1 - stats.t.cdf(np.abs(t), df=df) # one-sided test p-value
-    print("t:\t", t, "p:\t", 2*p) # two-sided test p-value
+    if config.significance_test_type == SignificanceTestType.McNemars:
+        p_value = calculate_mcnemars_test(hyperpartisan_valid_predictions, joint_valid_predictions)
+    elif config.significance_test_type == SignificanceTestType.Permutation:
+        p_value = calculate_permutation_test(hyperpartisan_valid_predictions, joint_valid_predictions)
+    elif config.significance_test_type == SignificanceTestType.TTest:
+        p_value = calculate_ttest(hyperpartisan_valid_predictions, joint_valid_predictions)
 
-    t2, p2 = ttest_ind(hyperpartisan_valid_predictions, joint_valid_predictions)
-    print("t2:\t", t2, "p2:\t", p2)
+    print(f'Calculating significance using \'{config.significance_test_type}\' test...Done')
+    print(f'p-value found: {p_value}')
 
-    # contingency_table = create_contingency_table(
-    #     hyperpartisan_valid_targets,
-    #     hyperpartisan_valid_predictions,
-    #     joint_valid_predictions)
-    
-    # result = mcnemar(contingency_table, exact=True)
-
-    # p_value = permutation_test(hyperpartisan_valid_predictions, joint_valid_predictions,
-    #                        method='approximate',
-    #                        num_rounds=10000,
-    #                        seed=0)
-
-    # print('Calculating p value using McNemar\'s test...Done')
-
-    # # summarize the finding
-    # print('statistic=%.3f, p-value=%.3f' % (result.statistic, result.pvalue))
-    
-    # print(f'p-value: {p_value}')
-
-    # # interpret the p-value
-    # if p_value > config.alpha_value:
-    #     print('Same proportions of errors (non-significant difference)')
-    # else:
-    #     print('Significant difference found')
+    # interpret the p-value
+    if p_value > config.alpha_value:
+        print('Same proportions of errors (non-significant difference)')
+    else:
+        print('Significant difference found!')
