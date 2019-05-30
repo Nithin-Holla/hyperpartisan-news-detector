@@ -124,20 +124,13 @@ def iterate_metaphor(model, metaphor_data, device):
 	batch_lengths = metaphor_data[1].to(device)
 
 	predictions = model.forward(batch_inputs, batch_lengths, task=TrainingMode.Metaphor)
-
 	predictions = predictions.tolist()
 
 	metaphorical = []
-	for sent in predictions:
-		sent = [p[0] for p in sent]
-		metaphorical.append(sum(sent) / len(sent))
-	metaphorical = sum(metaphorical) / len(metaphorical)
-
-	# metaphorical = []
-	# for i, sent in enumerate(predictions):
-	# 	sent = [int(p[0] > 0.5) for p in sent[:batch_lengths[i].item()]]
-	# 	metaphorical.append(int(sum(sent) > 1))
-	# metaphorical = sum(metaphorical)/len(metaphorical)
+	for i, sent in enumerate(predictions):
+		sent = [int(p > 0.5) for p in sent[:batch_lengths[i].item()]]
+		metaphorical.append(int(sum(sent) > 1))
+	metaphorical = sum(metaphorical)/len(metaphorical)
 
 	return metaphorical
 
@@ -175,8 +168,13 @@ def forward_through_metaphor(model, dataloader, device):
 	all_metaphors = []
 	all_ids = []
 
-	for step, (batch_inputs, _, batch_recover_idx, batch_num_sent, batch_sent_lengths, batch_feat, batch_ids) in enumerate(dataloader):
-		metaphorical = iterate_metaphor(model, (batch_inputs, batch_sent_lengths), device)
+	for step, (batch_inputs, _, batch_num_sent, batch_sent_lengths, batch_feat, batch_ids) in enumerate(dataloader):
+
+		metaphor_batch = HyperpartisanBatch(10000)
+		metaphor_batch.add_data(batch_inputs, 0, batch_num_sent, batch_sent_lengths, batch_feat)
+		metaphor_data = metaphor_batch.pad_and_sort_batch()
+
+		metaphorical = iterate_metaphor(model, (metaphor_data[0], metaphor_data[4]), device)
 
 		all_metaphors.append(metaphorical)
 		all_ids.append(batch_ids[0])
@@ -218,7 +216,7 @@ def eval_model(argument_parser):
 			predictions, ids = forward_full_hyperpartisan(model, hyperpartisan_test_dataloader, device, argument_parser.output)
 
 		if argument_parser.output == "predictions":
-			with open("model_output/pred_{}.txt".format(argument_parser.mode), "w") as f:
+			with open("model_output/pred_{}_nopre.txt".format(argument_parser.mode), "w") as f:
 				for Id, prediction in zip(ids, predictions):
 					f.write(Id + " " + str(prediction == 1) + "\n")
 		else:
@@ -248,7 +246,7 @@ if __name__ == '__main__':
 						help='Hidden dimension of the recurrent network')
 	parser.add_argument('--doc_encoder_hidden_dim', type=int, default=Constants.DEFAULT_DOC_ENCODER_DIM,
 						help='Hidden dimension of the recurrent network')
-	parser.add_argument('--glove_size', default=None,
+	parser.add_argument('--glove_size', type=int,
 						help='Number of GloVe vectors to load initially')
 	parser.add_argument('--hyperpartisan_dataset_folder', type=str,
 						help='Path to the hyperpartisan dataset')
