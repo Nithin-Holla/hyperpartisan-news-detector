@@ -1,6 +1,7 @@
 from model.JointModel import JointModel
 from os import listdir
 import torch
+from enums.training_mode import TrainingMode
 
 class Ensemble(object):
 
@@ -45,12 +46,29 @@ class Ensemble(object):
 
 	def forward(self, x, extra_args, task):
 
-		predictions = []
-		for model in self.models:
-			pred = model.forward(x, extra_args, task)
-			predictions.append(pred[0])
+		if task == TrainingMode.Hyperpartisan:
 
-		return sum(predictions)/self.num_models
+			predictions = []
+			for model in self.models:
+				pred = model.forward(x, extra_args, task)
+				predictions.append(pred[0])
+
+			return sum(predictions)/self.num_models
+
+		elif task == TrainingMode.Metaphor:
+
+			predictions = []
+			for i, model in enumerate(self.models):
+
+				if not i:
+					predictions = model.forward(x, extra_args, task).squeeze()
+				else:
+					predictions += model.forward(x, extra_args, task).squeeze()
+
+			mean_predictions = predictions / self.num_models
+
+			return mean_predictions
+				
 
 	def eval(self):
 
