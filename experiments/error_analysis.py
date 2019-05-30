@@ -1,8 +1,6 @@
 import argparse
 import os
 
-from statsmodels.stats.contingency_tables import mcnemar
-
 import torch
 from torch.utils.data import DataLoader
 
