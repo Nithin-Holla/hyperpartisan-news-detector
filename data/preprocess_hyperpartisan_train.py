@@ -4,7 +4,6 @@ from nltk import sent_tokenize, word_tokenize
 import numpy as np
 from nltk.corpus import stopwords as nltk_stopwords
 from gensim.parsing.preprocessing import STOPWORDS as gensim_stopwords
-import re
 
 def url_to_author(url):
 
@@ -63,7 +62,6 @@ def xml_parser(data_path, xml_file_articles, xml_file_ground_truth, remove_stopw
 	body_tags = ["p", "a", "q"]
 
 	stopwords = init_stopwords()
-	# re_num_simple = re.compile('^-?[0-9.,]+([eE^][0-9]+)?(th)?$')
 
 	# create iterators
 	article_iter = ET.iterparse(data_path + xml_file_articles, events = ("start", "end"))
