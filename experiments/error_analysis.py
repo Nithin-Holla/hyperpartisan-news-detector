@@ -152,11 +152,14 @@ def get_predictions(
 
     model.eval()
 
+    n_metaphors = 0
+    n_words = 0
+
     with torch.no_grad():
         for step, hyperpartisan_data in enumerate(dataloader):
             print(f'Step {step+1}/{total_length}                  \r', end='')
 
-            hyperpartisan_batch = HyperpartisanBatch(1000)  # just something big
+            hyperpartisan_batch = HyperpartisanBatch(10000)  # just something big
             hyperpartisan_batch.add_data(*hyperpartisan_data[:-1])  # exclude last element (id)
             hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
 
@@ -175,8 +178,18 @@ def get_predictions(
 
             batch_metaphor_predictions = model.forward(batch_inputs, batch_sent_lengths, task=TrainingMode.Metaphor)
             batch_metaphor_predictions = batch_metaphor_predictions.round().long()
-            batch_metaphor_predictions = torch.sum(batch_metaphor_predictions) > 0
-            metaphor_predictions.append(batch_metaphor_predictions.long().item())
+            batch_metaphor_predictions = torch.sum(batch_metaphor_predictions, dim=1)
+
+            n_metaphors += torch.sum(batch_metaphor_predictions).item()
+            n_words += torch.sum(batch_sent_lengths).item()
+
+            batch_metaphor_predictions = batch_metaphor_predictions > 0
+            batch_metaphor_predictions = torch.mean(batch_metaphor_predictions.float())
+            metaphor_predictions.append(batch_metaphor_predictions.item())
+
+    print('No. of metaphors = {}'.format(n_metaphors))
+    print('No. of words = {}'.format(n_words))
+    print('Percentage of metaphor words = {}'.format(n_metaphors / n_words))
 
     return hyp_targets, hyp_predictions, metaphor_predictions
 
@@ -184,12 +197,14 @@ def get_predictions(
 def correlation_analysis(model, hyperpartisan_validation_dataloader, device):
     hyp_targets, hyp_predictions, metaphor_predictions = get_predictions(model, hyperpartisan_validation_dataloader,
                                                                          device)
-    metaphor_and_hyp = sum([hyp_targets[i] == metaphor_predictions[i] == 1 for i in range(len(hyp_targets))])
-    metaphor_and_non_hyp = sum([hyp_targets[i] == 0 and metaphor_predictions[i] == 1 for i in range(len(hyp_targets))])
-    print('Percentage of hyperpartisan articles that are predicted to contain metaphors: {}'.format(metaphor_and_hyp / len(hyp_targets)))
-    print('Percentage of non-hyperpartisan articles that are predicted to contain metaphors: {}'.format(
-        metaphor_and_non_hyp / len(hyp_targets)))
-    return
+    hyp_articles = np.where(np.array(hyp_targets) == 1)[0]
+    non_hyp_articles = np.where(np.array(hyp_targets) == 0)[0]
+    metaphor_and_hyp = sum([metaphor_predictions[i] for i in hyp_articles]) / len(hyp_articles)
+    metaphor_and_non_hyp = sum([metaphor_predictions[i] for i in non_hyp_articles]) / len(non_hyp_articles)
+    print('Percentage of hyperpartisan articles that are predicted to contain metaphorical sentences: {}'.format(
+        metaphor_and_hyp))
+    print('Percentage of non-hyperpartisan articles that are predicted to contain metaphorical sentences: {}'.format(
+        metaphor_and_non_hyp))
 
 
 if __name__ == '__main__':
