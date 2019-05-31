@@ -3,9 +3,12 @@ import os
 
 import torch
 from torch.utils.data import DataLoader
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 import numpy as np
-
+from scipy.stats import pearsonr, spearmanr
 import sys
 
 from batches.hyperpartisan_batch import HyperpartisanBatch
@@ -174,7 +177,7 @@ def get_predictions(
                                                                  batch_num_sent, batch_sent_lengths, batch_feat),
                                                   task=TrainingMode.Hyperpartisan)
             hyp_targets.append(batch_targets.long().item())
-            hyp_predictions.append(batch_hyp_predictions.round().long().item())
+            hyp_predictions.append(batch_hyp_predictions.item())
 
             batch_metaphor_predictions = model.forward(batch_inputs, batch_sent_lengths, task=TrainingMode.Metaphor)
             batch_metaphor_predictions = batch_metaphor_predictions.round().long()
@@ -191,20 +194,31 @@ def get_predictions(
     print('No. of words = {}'.format(n_words))
     print('Percentage of metaphor words = {}'.format(n_metaphors / n_words))
 
-    return hyp_targets, hyp_predictions, metaphor_predictions
+    return np.array(hyp_targets), np.array(hyp_predictions), np.array(metaphor_predictions)
 
 
 def correlation_analysis(model, hyperpartisan_validation_dataloader, device):
     hyp_targets, hyp_predictions, metaphor_predictions = get_predictions(model, hyperpartisan_validation_dataloader,
                                                                          device)
-    hyp_articles = np.where(np.array(hyp_targets) == 1)[0]
-    non_hyp_articles = np.where(np.array(hyp_targets) == 0)[0]
-    metaphor_and_hyp = sum([metaphor_predictions[i] for i in hyp_articles]) / len(hyp_articles)
-    metaphor_and_non_hyp = sum([metaphor_predictions[i] for i in non_hyp_articles]) / len(non_hyp_articles)
+    hyp_articles = np.where(hyp_targets == 1)[0]
+    non_hyp_articles = np.where(hyp_targets == 0)[0]
+    metaphor_and_hyp = np.sum(metaphor_predictions[hyp_articles]) / len(hyp_articles)
+    metaphor_and_non_hyp = np.sum(metaphor_predictions[non_hyp_articles]) / len(non_hyp_articles)
     print('Percentage of hyperpartisan articles that are predicted to contain metaphorical sentences: {}'.format(
         metaphor_and_hyp))
     print('Percentage of non-hyperpartisan articles that are predicted to contain metaphorical sentences: {}'.format(
         metaphor_and_non_hyp))
+
+    plt.scatter(metaphor_predictions[hyp_articles], hyp_predictions[hyp_articles], c='red')
+    plt.scatter(metaphor_predictions[non_hyp_articles], hyp_predictions[non_hyp_articles], c='blue')
+    plt.xlabel('Percentage of metaphorical sentences')
+    plt.ylabel('Hyperpartisan score')
+    plt.savefig('correlation.png')
+
+    pearson_corr = pearsonr(metaphor_predictions, hyp_predictions)
+    spearman_corr = spearmanr(metaphor_predictions, hyp_predictions)
+    print('Pearson correlation = {}'.format(pearson_corr))
+    print('Spearman correlation = {}'.format(spearman_corr))
 
 
 if __name__ == '__main__':
