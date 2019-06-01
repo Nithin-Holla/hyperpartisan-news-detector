@@ -100,7 +100,6 @@ def get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation
     pred, word_attn, sent_attn = model.forward(article_inputs, (article_recover_idx, article_num_sent, article_sent_lengths, article_feat),
                                                task=TrainingMode.Hyperpartisan, return_attention=True)
 
-    pred = pred.item()
     article_sent_lengths = article_sent_lengths[article_recover_idx]
     word_attn = np.around(word_attn.detach().cpu().numpy(), decimals=4)
     sent_attn = np.around(sent_attn.detach().cpu().numpy(), decimals=4)

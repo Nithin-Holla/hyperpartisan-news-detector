@@ -51,29 +51,29 @@ class Ensemble(object):
 
 			predictions = []
 
-		for i, model in enumerate(self.models):
-			if return_attention:
-				pred, word_attention, sentence_attention = model.forward(x, extra_args, task, return_attention=True)
-				if i == 0:
-					word_attentions = word_attention.unsqueeze(0)
-					sentence_attentions = sentence_attention.unsqueeze(0)
+			for i, model in enumerate(self.models):
+				if return_attention:
+					pred, word_attention, sentence_attention = model.forward(x, extra_args, task, return_attention=True)
+					if i == 0:
+						word_attentions = word_attention.unsqueeze(0)
+						sentence_attentions = sentence_attention.unsqueeze(0)
+					else:
+						word_attentions = torch.cat((word_attentions, word_attention.unsqueeze(0)), dim=0)
+						sentence_attentions = torch.cat((sentence_attentions, sentence_attention.unsqueeze(0)), dim=0)
 				else:
-					word_attentions = torch.cat((word_attentions, word_attention.unsqueeze(0)), dim=0)
-					sentence_attentions = torch.cat((sentence_attentions, sentence_attention.unsqueeze(0)), dim=0)
-			else:
-				pred = model.forward(x, extra_args, task)
-			
-				predictions.append(pred[0])
+					pred = model.forward(x, extra_args, task)
+				
+					predictions.append(pred[0])
 
-		result_predictions = sum(predictions)/self.num_models
+			result_predictions = sum(predictions)/self.num_models
+			if return_attention:
+				return result_predictions, word_attentions.sum(dim=0).squeeze(), sentence_attentions.sum(dim=0).squeeze()
+			else:
+				return result_predictions
 
 		elif task == TrainingMode.Metaphor:
 
 			predictions = []
-		if return_attention:
-			return result_predictions, word_attentions.sum(dim=0).squeeze(), sentence_attentions.sum(dim=0).squeeze()
-		else:
-			return result_predictions
 			for i, model in enumerate(self.models):
 
 				if not i:
