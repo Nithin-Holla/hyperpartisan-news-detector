@@ -9,10 +9,14 @@ from constants import Constants
 
 from enums.training_mode import TrainingMode
 from datasets.hyperpartisan_dataset import HyperpartisanDataset
+from datasets.metaphor_dataset import MetaphorDataset
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
+from helpers.data_helper import DataHelper
+from helpers.metaphor_loader import MetaphorLoader
+from helpers.hyperpartisan_loader import HyperpartisanLoader
 from batches.hyperpartisan_batch import HyperpartisanBatch
+from model.Ensemble import Ensemble
 
-from model.Ensemble import Ensemble 
 import os
 from sklearn import metrics
 
@@ -47,12 +51,12 @@ def initialize_model(argument_parser, device):
 		model = Ensemble(path_to_models=argument_parser.checkpoint_path,
 						 sent_encoder_hidden_dim=argument_parser.sent_encoder_hidden_dim,
 						 doc_encoder_hidden_dim=argument_parser.doc_encoder_hidden_dim,
-					 	 num_layers=argument_parser.num_layers,
-					 	 skip_connection=argument_parser.skip_connection,
-					 	 include_article_features=argument_parser.include_article_features,
-					 	 document_encoder_model=argument_parser.document_encoder_model,
-					 	 pre_attention_layer=argument_parser.pre_attention_layer,
-					 	 total_embedding_dim=total_embedding_dim,
+						 num_layers=argument_parser.num_layers,
+						 skip_connection=argument_parser.skip_connection,
+						 include_article_features=argument_parser.include_article_features,
+						 document_encoder_model=argument_parser.document_encoder_model,
+						 pre_attention_layer=argument_parser.pre_attention_layer,
+						 total_embedding_dim=total_embedding_dim,
 						 device=device
 						 )
 
@@ -80,19 +84,42 @@ def initialize_model(argument_parser, device):
 
 
 def create_hyperpartisan_loaders(argument_parser, glove_vectors):
-	hyperpartisan_test_dataset = HyperpartisanDataset(argument_parser.hyperpartisan_dataset_folder + argument_parser.txt_file,
-													  argument_parser.concat_glove,
-													  glove_vectors,
-													  argument_parser.elmo_model)
 
-	_, _, hyperpartisan_test_dataloader = DataHelperHyperpartisan.create_dataloaders(
-		train_dataset=None,
-		validation_dataset=None,
-		test_dataset=hyperpartisan_test_dataset,
+	hyperpartisan_train_dataset, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
+		hyperpartisan_dataset_folder=argument_parser.hyperpartisan_dataset_folder,
+		concat_glove=argument_parser.concat_glove,
+		glove_vectors=glove_vectors,
+		elmo_model=argument_parser.elmo_model)
+
+	hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
+		train_dataset=hyperpartisan_train_dataset,
+		validation_dataset=hyperpartisan_validation_dataset,
+		test_dataset=None,
 		batch_size=argument_parser.batch_size,
 		shuffle=False)
 
-	return hyperpartisan_test_dataloader
+	return hyperpartisan_train_dataloader, hyperpartisan_validation_dataloader
+
+
+def create_metaphor_loaders(argument_parser, glove_vectors):
+
+	metaphor_train_dataset, metaphor_validation_dataset, metaphor_test_dataset = MetaphorLoader.get_metaphor_datasets(
+		metaphor_dataset_folder=argument_parser.metaphor_dataset_folder,
+		concat_glove=argument_parser.concat_glove,
+		glove_vectors=glove_vectors,
+		elmo_model=argument_parser.elmo_model,
+		lowercase_sentences=False,
+		tokenize_sentences=True,
+		only_news=False)
+
+	metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader = DataHelper.create_dataloaders(
+		train_dataset=metaphor_train_dataset,
+		validation_dataset=metaphor_validation_dataset,
+		test_dataset=metaphor_test_dataset,
+		batch_size=argument_parser.batch_size,
+		shuffle=False)
+
+	return metaphor_train_dataloader, metaphor_validation_dataloader, metaphor_test_dataloader
 
 
 def iterate_hyperpartisan(
@@ -119,7 +146,7 @@ def iterate_hyperpartisan(
 	else:
 		return predictions.tolist()
 
-def iterate_metaphor(model, metaphor_data, device):
+def iterate_hyperpartisan_through_metaphor(model, metaphor_data, device):
 	batch_inputs = metaphor_data[0].to(device).float()
 	batch_lengths = metaphor_data[1].to(device)
 
@@ -133,6 +160,37 @@ def iterate_metaphor(model, metaphor_data, device):
 	metaphorical = sum(metaphorical)/len(metaphorical)
 
 	return metaphorical
+
+
+def iterate_metaphor(model, metaphor_data, device, output):
+	batch_inputs = metaphor_data[0].to(device).float()
+	batch_targets = metaphor_data[1].to(device).view(-1).float()
+	batch_lengths = metaphor_data[2].to(device)
+
+	predictions = model.forward(batch_inputs, batch_lengths, task=TrainingMode.Metaphor)
+
+	unpadded_targets = batch_targets[batch_targets != -1]
+	unpadded_predictions = predictions.view(-1)[batch_targets != -1]
+
+	if output == "predictions":
+		return unpadded_targets.long().tolist(), unpadded_predictions.round().long().tolist()
+	else:
+		return unpadded_targets.long().tolist(), unpadded_predictions.tolist()
+
+
+def forward_full_metaphor(model, dataloader, device, output):
+
+	all_targets = []
+	all_predictions = []
+
+	for step, metaphor_data in enumerate(dataloader):
+
+		batch_targets, batch_predictions = iterate_metaphor(model, metaphor_data, device, output)
+
+		all_targets.extend(batch_targets)
+		all_predictions.extend(batch_predictions)
+
+	return all_targets, all_predictions
 
 
 def forward_full_hyperpartisan(model, dataloader, device, output):
@@ -156,15 +214,14 @@ def forward_full_hyperpartisan(model, dataloader, device, output):
 			device=device,
 			output=output)
 
-		print(batch_ids[0], batch_predictions)
-
 		all_predictions.append(batch_predictions)
 		all_ids.append(batch_ids[0])
 
 	return all_predictions, all_ids
 
 
-def forward_through_metaphor(model, dataloader, device):
+
+def forward_hyperpartisan_through_metaphor(model, dataloader, device):
 	all_metaphors = []
 	all_ids = []
 
@@ -174,22 +231,17 @@ def forward_through_metaphor(model, dataloader, device):
 		metaphor_batch.add_data(batch_inputs, 0, batch_num_sent, batch_sent_lengths, batch_feat)
 		metaphor_data = metaphor_batch.pad_and_sort_batch()
 
-		metaphorical = iterate_metaphor(model, (metaphor_data[0], metaphor_data[4]), device)
+		metaphorical = iterate_hyperpartisan_through_metaphor(model, (metaphor_data[0], metaphor_data[4]), device)
 
 		all_metaphors.append(metaphorical)
 		all_ids.append(batch_ids[0])
-
-		print(batch_ids[0], metaphorical)
 
 	return all_metaphors, all_ids
 
 
 def eval_model(argument_parser):
-	# Set device
-	if argument_parser.force_cpu:
-		device = "cpu"
-	else:
-		device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 	try:
 		os.mkdir("model_output")
@@ -204,34 +256,56 @@ def eval_model(argument_parser):
 
 	# Load pre-trained model
 	model = initialize_model(argument_parser, device)
-
-	# initialize test set loader
-	hyperpartisan_test_dataloader = create_hyperpartisan_loaders(argument_parser, glove_vectors)
-
 	model.eval()
 
-	if argument_parser.mode != "metaphorical":
+	if argument_parser.mode == "hyperpartisan":
+
+		if argument_parser.testing_on == "training":
+			hyperpartisan_dataloader = create_hyperpartisan_loaders(argument_parser, glove_vectors)[0]
+		elif argument_parser.testing_on == "validation":
+			hyperpartisan_dataloader = create_hyperpartisan_loaders(argument_parser, glove_vectors)[1]
 
 		with torch.no_grad():
-			predictions, ids = forward_full_hyperpartisan(model, hyperpartisan_test_dataloader, device, argument_parser.output)
+			predictions, ids = forward_full_hyperpartisan(model, hyperpartisan_dataloader, device, argument_parser.output)
 
 		if argument_parser.output == "predictions":
-			with open("model_output/pred_{}.txt".format(argument_parser.mode), "w") as f:
+			with open("model_output/pred_{}_{}.txt".format(argument_parser.mode, argument_parser.testing_on), "w") as f:
 				for Id, prediction in zip(ids, predictions):
 					f.write(Id + " " + str(prediction == 1) + "\n")
 		else:
-			with open("model_output/prob_{}.txt".format(argument_parser.mode), "w") as f:
+			with open("model_output/prob_{}_{}.txt".format(argument_parser.mode, argument_parser.testing_on), "w") as f:
 				for Id, prob in zip(ids, predictions):
 					f.write(Id + " " + str(prob) + "\n")
 
-	else:
+	elif argument_parser.mode == "hyper_through_metaphor":
+
+		if argument_parser.testing_on == "training":
+			hyperpartisan_dataloader = create_hyperpartisan_loaders(argument_parser, glove_vectors)[0]
+		elif argument_parser.testing_on == "validation":
+			hyperpartisan_dataloader = create_hyperpartisan_loaders(argument_parser, glove_vectors)[1]
 
 		with torch.no_grad():
-			metaphorical, ids = forward_through_metaphor(model, hyperpartisan_test_dataloader, device)
+			metaphorical, ids = forward_hyperpartisan_through_metaphor(model, hyperpartisan_dataloader, device)
 
-		with open("model_output/metaphorical.txt", "w") as f:
+		with open("model_output/metaphorical_hyperpartisan_{}.txt".format(argument_parser.testing_on), "w") as f:
 			for Id, meta in zip(ids, metaphorical):
 				f.write(Id + " " + str(meta) + "\n")
+
+	elif argument_parser.mode == "metaphor":
+
+		if argument_parser.testing_on == "training":
+			metaphor_dataloader = create_metaphor_loaders(argument_parser, glove_vectors)[0]
+		elif argument_parser.testing_on == "validation":
+			metaphor_dataloader = create_metaphor_loaders(argument_parser, glove_vectors)[1]
+		elif argument_parser.testing_on == "test":
+			metaphor_dataloader = create_metaphor_loaders(argument_parser, glove_vectors)[2]
+
+		with torch.no_grad():
+			targets, predictions = forward_full_metaphor(model, metaphor_dataloader, device, argument_parser.output)
+
+		with open("model_output/metaphor_{}_{}.txt".format(argument_parser.output, argument_parser.testing_on), "w") as f:
+			for target, prediction in zip(targets, predictions):
+				f.write(str(target) + " " + str(prediction) + "\n")
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
@@ -250,6 +324,7 @@ if __name__ == '__main__':
 						help='Number of GloVe vectors to load initially')
 	parser.add_argument('--hyperpartisan_dataset_folder', type=str,
 						help='Path to the hyperpartisan dataset')
+	parser.add_argument('--metaphor_dataset_folder', type=str)
 	parser.add_argument('--elmo_vector', type=str, choices=["top", "average"], default="average",
 						help='method for final emlo embeddings used')
 	parser.add_argument('--num_layers', type=int, default=Constants.DEFAULT_NUM_LAYERS,
@@ -266,16 +341,17 @@ if __name__ == '__main__':
 	parser.add_argument('--document_encoder_model', type=str, default="GRU")
 	parser.add_argument('--pre_attention_layer', action="store_true")
 	parser.add_argument('--model_type', type=str, choices=["ensemble", "single"], default = "ensemble")
-
-	parser.add_argument('--txt_file', type=str, required=True,
-						help='text file name containing the processed xml file')
-	parser.add_argument('--hdf5_file', type=str, required=True,
-						help='hdf5 file name that contains the elmo embeddings')
 	parser.add_argument('--output', type=str, choices = ["predictions", "probabilities"], default = "predictions",
 						help="whether to return the predictions or the probabilities of the instances")
-	parser.add_argument('--mode', type=str, choices=["joint", "hyperpartisan", "metaphorical"], default="joint")
-	parser.add_argument('--force_cpu', action="store_true")
+	parser.add_argument('--mode', type=str, choices=["hyperpartisan", "hyper_through_metaphor", "metaphor"], default="hyperpartisan")
+	parser.add_argument('--testing_on', type=str, choices=["training", "validation", "test"], default="test")
 
 	argument_parser = parser.parse_args()
+
+	if argument_parser.mode in ["hyper_through_metaphor", "metaphor"]:
+		assert "joint" in argument_parser.checkpoint_path
+
+	if argument_parser.mode in ["hyperpartisan", "hyper_through_metaphor"]:
+		assert "test" != argument_parser.testing_on
 
 	eval_model(argument_parser)
