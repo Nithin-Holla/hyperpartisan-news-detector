@@ -20,7 +20,7 @@ from batches.hyperpartisan_batch import HyperpartisanBatch
 utils_helper = UtilsHelper()
 
 
-def title_attention_plot(hyperpartisan_validation_dataset, model, device):
+def title_attention_plot(hyperpartisan_validation_dataset, model1, model2, device):
     _, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=None,
@@ -29,11 +29,13 @@ def title_attention_plot(hyperpartisan_validation_dataset, model, device):
 
     attn_summary = None
 
+    model1.eval()
+    model2.eval()
+
     total_length = len(hyperpartisan_validation_dataloader)
     for idx, hyperpartisan_data in enumerate(hyperpartisan_validation_dataloader):
         print(f'{idx}/{total_length}            \r', end='')
 
-        model.eval()
 
         hyperpartisan_batch = HyperpartisanBatch(10000)
         hyperpartisan_batch.add_data(*hyperpartisan_data[:-1])
@@ -46,23 +48,32 @@ def title_attention_plot(hyperpartisan_validation_dataset, model, device):
         article_sent_lengths = hyperpartisan_data[4].to(device)
         article_feat = hyperpartisan_data[5].to(device)
 
-        pred, _, batch_sent_attn = model.forward(article_inputs, (article_recover_idx, article_num_sent, article_sent_lengths, article_feat),
+        _, _, batch_sent_attn1 = model1.forward(article_inputs, (article_recover_idx, article_num_sent, article_sent_lengths, article_feat),
+                                                 task=TrainingMode.Hyperpartisan, return_attention=True)
+                                                
+        _, _, batch_sent_attn2 = model2.forward(article_inputs, (article_recover_idx, article_num_sent, article_sent_lengths, article_feat),
                                                  task=TrainingMode.Hyperpartisan, return_attention=True)
 
         decimals = 4
+        batch_sent_attn = batch_sent_attn1 - batch_sent_attn2
         batch_sent_attn = torch.round(batch_sent_attn * 10**decimals) / (10**decimals)
+        
+        min_sent_attn = batch_sent_attn.min()
+        range_sent_attn = batch_sent_attn.max() - min_sent_attn
+        batch_sent_attn = (batch_sent_attn - min_sent_attn) / range_sent_attn
+        
         article_attn = torch.zeros(batch_sent_attn.shape[0], 2, device=device)
         article_attn[:, 0] = batch_sent_attn[0]
         article_attn[:, 1] = batch_sent_attn[1:].sum().float() / (article_num_sent.float() - 1)
-        
-        if idx == 0:
-            attn_summary = article_attn
-        else:
-            attn_summary = torch.cat((attn_summary, article_attn), dim=0)
 
-    attn_summary = attn_summary.mean(dim=0, keepdim=True)
+        if idx == 0:
+            attn_summary = article_attn.detach().cpu().numpy()
+        else:
+            attn_summary = np.concatenate((attn_summary, article_attn.detach().cpu().numpy()), axis=0)
+
+    attn_summary = np.mean(attn_summary, axis=0, keepdims=True)
     plt.figure()
-    sns.heatmap(attn_summary.detach().cpu().numpy(), square=True,
+    sns.heatmap(attn_summary, square=True,
                 annot=True, cmap='Blues', cbar=False)
     plt.show()
 
@@ -107,7 +118,7 @@ def get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation
     return pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt
 
 
-def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id, device):
+def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model1, model2, article_id, device):
     """
     Generates a heatmap of the word-level and attention-level attention weights
     :param hyperpartisan_validation_dataloader: Dataloader for hyperpartisan validation set
@@ -116,8 +127,25 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     :return: None
     """
 
-    pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(
-        hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id, device)
+    pred, word_attn1, sent_attn1, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(
+        hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model1, article_id, device)
+
+    pred, word_attn2, sent_attn2, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(
+        hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model2, article_id, device)
+
+    print(word_attn1.shape)
+    print(sent_attn1.shape)
+    word_attn = word_attn1 - word_attn2
+    min_word_attn = np.amin(word_attn, axis=1, keepdims=True)
+    range_word_attn = np.amax(word_attn, axis=1, keepdims=True) - min_word_attn
+    word_attn = (word_attn - min_word_attn) / range_word_attn
+    for i, sentence_word_attn in enumerate(word_attn):
+        sentence_word_attn[article_sent_lengths[i]:] = 0
+                           
+    sent_attn = sent_attn1 - sent_attn2
+    min_sent_attn = np.amin(sent_attn, axis=0)
+    range_sent_attn = np.amax(sent_attn, axis=0) - min_sent_attn
+    sent_attn = (sent_attn - min_sent_attn) / range_sent_attn
 
     # Display results
     print('Hyperpartisan score: {}'.format(pred))
@@ -333,12 +361,13 @@ def predict(config):
             config.article_id,
             config.sentence_id,
             device)
-    else:
-        title_attention_plot(
-            hyperpartisan_validation_dataset, joint_model, device)
+    elif config.article_id:
         visualize_article_attention(config.hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader,
                                     joint_model,
+                                    hyperpartisan_model,
                                     article_id=config.article_id, device=device)
+    else:
+        title_attention_plot(hyperpartisan_validation_dataset, joint_model, hyperpartisan_model, device)
 
 
 if __name__ == '__main__':
@@ -349,7 +378,7 @@ if __name__ == '__main__':
                         help='Path to load the joint model')
     parser.add_argument('--vector_file_name', type=str, required=True,
                         help='File in which vectors are saved')
-    parser.add_argument('--article_id', type=int, required=True,
+    parser.add_argument('--article_id', type=int,
                         help='ID of the article as per the CSV file of the validation set')
     parser.add_argument('--vector_cache_dir', type=str, default='.vector_cache',
                         help='Directory where vectors would be cached')
