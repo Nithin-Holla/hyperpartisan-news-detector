@@ -11,14 +11,16 @@ from enums.elmo_model import ELMoModel
 from enums.training_mode import TrainingMode
 from helpers.data_helper_hyperpartisan import DataHelperHyperpartisan
 from helpers.hyperpartisan_loader import HyperpartisanLoader
+from model.Ensemble import Ensemble
 from model.JointModel import JointModel
 from helpers.utils_helper import UtilsHelper
 from constants import Constants
+from batches.hyperpartisan_batch import HyperpartisanBatch
 
 utils_helper = UtilsHelper()
 
 
-def title_attention_plot(hyperpartisan_validation_dataset, model):
+def title_attention_plot(hyperpartisan_validation_dataset, model, device):
     _, hyperpartisan_validation_dataloader, _ = DataHelperHyperpartisan.create_dataloaders(
         validation_dataset=hyperpartisan_validation_dataset,
         test_dataset=None,
@@ -27,64 +29,86 @@ def title_attention_plot(hyperpartisan_validation_dataset, model):
 
     attn_summary = None
 
-    for idx, (
-            article, article_target, article_recover_idx, article_num_sent, article_sent_lengths,
-            extra_feat, _) in enumerate(
-        hyperpartisan_validation_dataloader):
+    total_length = len(hyperpartisan_validation_dataloader)
+    for idx, hyperpartisan_data in enumerate(hyperpartisan_validation_dataloader):
+        print(f'{idx}/{total_length}            \r', end='')
+
         model.eval()
-        with torch.no_grad():
-            pred, _, batch_sent_attn = model.forward(article,
-                                                     (article_recover_idx, article_num_sent, article_sent_lengths,
-                                                      extra_feat),
-                                                     task=TrainingMode.Hyperpartisan, return_attention=True)
-        batch_sent_attn = np.around(batch_sent_attn.numpy(), decimals=4)
-        article_num_sent = article_num_sent.numpy()
-        article_attn = np.zeros((batch_sent_attn.shape[0], 2))
-        article_attn[:, 0] = batch_sent_attn[:, 0]
-        article_attn[:, 1] = np.sum(batch_sent_attn[:, 1:], axis=1) / (article_num_sent - 1)
+
+        hyperpartisan_batch = HyperpartisanBatch(10000)
+        hyperpartisan_batch.add_data(*hyperpartisan_data[:-1])
+        hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
+
+        article_inputs = hyperpartisan_data[0].to(device)
+        article_targets = hyperpartisan_data[1].to(device)
+        article_recover_idx = hyperpartisan_data[2].to(device)
+        article_num_sent = hyperpartisan_data[3].to(device)
+        article_sent_lengths = hyperpartisan_data[4].to(device)
+        article_feat = hyperpartisan_data[5].to(device)
+
+        pred, _, batch_sent_attn = model.forward(article_inputs, (article_recover_idx, article_num_sent, article_sent_lengths, article_feat),
+                                                 task=TrainingMode.Hyperpartisan, return_attention=True)
+
+        decimals = 4
+        batch_sent_attn = torch.round(batch_sent_attn * 10**decimals) / (10**decimals)
+        article_attn = torch.zeros(batch_sent_attn.shape[0], 2, device=device)
+        article_attn[:, 0] = batch_sent_attn[0]
+        article_attn[:, 1] = batch_sent_attn[1:].sum().float() / (article_num_sent.float() - 1)
+        
         if idx == 0:
             attn_summary = article_attn
         else:
-            attn_summary = np.vstack([attn_summary, article_attn])
-    attn_summary = np.mean(attn_summary, axis=0, keepdims=True)
+            attn_summary = torch.cat((attn_summary, article_attn), dim=0)
+
+    attn_summary = attn_summary.mean(dim=0, keepdim=True)
     plt.figure()
-    sns.heatmap(attn_summary, square=True, annot=True, cmap='Blues', cbar=False)
+    sns.heatmap(attn_summary.detach().cpu().numpy(), square=True,
+                annot=True, cmap='Blues', cbar=False)
     plt.show()
 
 
-def get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id):
+def get_attention_weights(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id, device):
     # Load the CSV file
     article_df = pd.read_csv(os.path.join(hyperpartisan_dataset_folder, 'valid_byart.txt'), sep='\t',
                              converters={'title_tokens': literal_eval, 'body_tokens': literal_eval})
 
     # Load the article text
     article_entry = article_df.iloc[article_id - 2]
-    article_txt = [article_entry['title_tokens']] + article_entry['body_tokens']
+    article_txt = [article_entry['title_tokens']] + \
+        article_entry['body_tokens']
 
     # Load one article
-    for idx, (
-            article_vectors, article_target, article_recover_idx, article_num_sent, article_sent_lengths,
-            extra_feat, _) in enumerate(
-        hyperpartisan_validation_dataloader):
+    for idx, hyperpartisan_data in enumerate(hyperpartisan_validation_dataloader):
+        model.eval()
+
+        hyperpartisan_batch = HyperpartisanBatch(10000)
+        hyperpartisan_batch.add_data(*hyperpartisan_data[:-1])
+        hyperpartisan_data = hyperpartisan_batch.pad_and_sort_batch()
+
+        article_inputs = hyperpartisan_data[0].to(device)
+        # article_targets = hyperpartisan_data[1].to(device)
+        article_recover_idx = hyperpartisan_data[2].to(device)
+        article_num_sent = hyperpartisan_data[3].to(device)
+        article_sent_lengths = hyperpartisan_data[4].to(device)
+        article_feat = hyperpartisan_data[5].to(device)
+
         if idx + 2 == article_id:
             break
 
     # Obtain prediction and attention weights from the model
     model.eval()
-    with torch.no_grad():
-        pred, word_attn, sent_attn = model.forward(article_vectors,
-                                                   (article_recover_idx, article_num_sent, article_sent_lengths,
-                                                    extra_feat),
-                                                   task=TrainingMode.Hyperpartisan, return_attention=True)
+    pred, word_attn, sent_attn = model.forward(article_inputs, (article_recover_idx, article_num_sent, article_sent_lengths, article_feat),
+                                               task=TrainingMode.Hyperpartisan, return_attention=True)
+
     pred = pred.item()
     article_sent_lengths = article_sent_lengths[article_recover_idx]
-    word_attn = np.around(word_attn.numpy(), decimals=4)
-    sent_attn = np.around(sent_attn.numpy(), decimals=4)
+    word_attn = np.around(word_attn.detach().cpu().numpy(), decimals=4)
+    sent_attn = np.around(sent_attn.detach().cpu().numpy(), decimals=4)
 
     return pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt
 
 
-def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id):
+def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id, device):
     """
     Generates a heatmap of the word-level and attention-level attention weights
     :param hyperpartisan_validation_dataloader: Dataloader for hyperpartisan validation set
@@ -94,7 +118,7 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     """
 
     pred, word_attn, sent_attn, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(
-        hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id)
+        hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model, article_id, device)
 
     # Display results
     print('Hyperpartisan score: {}'.format(pred))
@@ -105,7 +129,7 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     print('Sentence-level attention: {}'.format(sent_attn))
 
     # Plot word-level attention weights per sentence
-    article_sent_lengths = article_sent_lengths.numpy()
+    article_sent_lengths = article_sent_lengths.cpu().numpy()
     max_len = max(article_sent_lengths)
     article_array = np.empty((len(article_txt), max_len), dtype=object)
     for i in range(len(article_txt)):
@@ -113,48 +137,152 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     article_array[article_array == None] = ''
     plt.figure(figsize=(60, 5))
     plt.axis('off')
+
     sns.heatmap(word_attn, cmap='Blues', yticklabels=False, xticklabels=False, annot=article_array, fmt='',
                 annot_kws={'size': 7}, cbar=False, square=True)
     plt.tight_layout()
 
     # Plot sentence-level attention weights
-    article_txt = [' '.join(sent) for sent in article_txt]
+    article_txt = np.expand_dims(np.array([' '.join(sent) for sent in article_txt]), axis=1)
+    sent_attn = np.expand_dims(sent_attn, axis=1)
     plt.figure()
     plt.axis('off')
-    attn_colors = plt.cm.Blues(sent_attn[0])
-    for i in range(len(article_txt)):
-        y_loc = 1 - i * 0.1
-        x_loc = 0
-        plt.text(x_loc, y_loc, article_txt[i], bbox={'facecolor': attn_colors[i], 'linewidth': 0})
+    sns.heatmap(sent_attn, cmap='Blues', yticklabels=False, xticklabels=False, annot=article_txt, fmt='',
+                annot_kws={'size': 7}, cbar=False)
+    plt.tight_layout()
     plt.show()
 
 
 def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader,
-                                       hyperpartisan_model, joint_model, article_id, sentence_id):
+                                       hyperpartisan_model, joint_model, article_id, sentence_id, device):
     _, hyperpartisan_word_attn, _, _, _, _ = get_attention_weights(
         hyperpartisan_dataset_folder,
         hyperpartisan_validation_dataloader,
         hyperpartisan_model,
-        article_id)
+        article_id,
+        device)
 
     _, joint_word_attn, _, _, _, article_array = get_attention_weights(
         hyperpartisan_dataset_folder,
         hyperpartisan_validation_dataloader,
         joint_model,
-        article_id)
+        article_id,
+        device)
 
     sentence_labels = article_array[sentence_id]
-    subtracted_word_attention = joint_word_attn[sentence_id] - hyperpartisan_word_attn[sentence_id]
+    subtracted_word_attention = joint_word_attn[sentence_id] - \
+        hyperpartisan_word_attn[sentence_id]
 
     min_v = min(subtracted_word_attention)
     range_v = max(subtracted_word_attention) - min_v
-    normalized_weights = (((subtracted_word_attention - min_v) / range_v)[:len(sentence_labels)])[np.newaxis, :]
+    normalized_weights = (((subtracted_word_attention - min_v) /
+                           range_v)[:len(sentence_labels)])[np.newaxis, :]
 
     sns.heatmap(normalized_weights, cmap='Blues', yticklabels=False, xticklabels=sentence_labels, cbar=False,
                 square=True)
     plt.xticks(rotation=90)
     plt.tight_layout()
     plt.show()
+
+
+def load_model_state(model, model_checkpoint_path, device):
+    if not os.path.isfile(model_checkpoint_path):
+        raise Exception('Model checkpoint path is invalid')
+
+    checkpoint = torch.load(model_checkpoint_path, map_location=device)
+    if not checkpoint['model_state_dict']:
+        raise Exception('Model state dictionary checkpoint not found')
+
+    model.load_state_dict(checkpoint['model_state_dict'])
+
+
+def initialize_models(
+        hyperpartisan_model_checkpoint_path: str,
+        joint_model_checkpoint_path: str,
+        device: torch.device,
+        elmo_model: ELMoModel,
+        concat_glove: bool,
+        model_type: str):
+
+    print('Loading model state...\r', end='')
+
+    if elmo_model == ELMoModel.Original:
+        total_embedding_dim = Constants.ORIGINAL_ELMO_EMBEDDING_DIMENSION
+    elif elmo_model == ELMoModel.Small:
+        total_embedding_dim = Constants.SMALL_ELMO_EMBEDDING_DIMENSION
+
+    if concat_glove:
+        total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
+
+    if model_type == "ensemble":
+
+        assert not os.path.isfile(joint_model_checkpoint_path)
+        assert not os.path.isfile(hyperpartisan_model_checkpoint_path)
+
+        hyperpartisan_model = Ensemble(path_to_models=hyperpartisan_model_checkpoint_path,
+                                       sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                                       doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                                       num_layers=Constants.DEFAULT_NUM_LAYERS,
+                                       skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                                       include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                                       document_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                                       pre_attention_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER,
+                                       total_embedding_dim=total_embedding_dim,
+                                       device=device
+                                       )
+
+        joint_model = Ensemble(path_to_models=joint_model_checkpoint_path,
+                               sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                               doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                               num_layers=Constants.DEFAULT_NUM_LAYERS,
+                               skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                               include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                               document_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                               pre_attention_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER,
+                               total_embedding_dim=total_embedding_dim,
+                               device=device
+                               )
+
+    else:
+
+        assert os.path.isfile(joint_model_checkpoint_path)
+        assert os.path.isfile(hyperpartisan_model_checkpoint_path)
+
+        hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
+                                         sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                                         doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                                         num_layers=Constants.DEFAULT_NUM_LAYERS,
+                                         sent_encoder_dropout_rate=0.,
+                                         doc_encoder_dropout_rate=0.,
+                                         output_dropout_rate=0.,
+                                         device=device,
+                                         skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                                         include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                                         doc_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                                         pre_attn_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER
+                                         ).to(device)
+
+        joint_model = JointModel(embedding_dim=total_embedding_dim,
+                                 sent_encoder_hidden_dim=Constants.DEFAULT_HIDDEN_DIMENSION,
+                                 doc_encoder_hidden_dim=Constants.DEFAULT_DOC_ENCODER_DIM,
+                                 num_layers=Constants.DEFAULT_NUM_LAYERS,
+                                 sent_encoder_dropout_rate=0.,
+                                 doc_encoder_dropout_rate=0.,
+                                 output_dropout_rate=0.,
+                                 device=device,
+                                 skip_connection=Constants.DEFAULT_SKIP_CONNECTION,
+                                 include_article_features=Constants.DEFAULT_INCLUDE_ARTICLE_FEATURES,
+                                 doc_encoder_model=Constants.DEFAULT_DOCUMENT_ENCODER_MODEL,
+                                 pre_attn_layer=Constants.DEFAULT_PRE_ATTENTION_LAYER
+                                 ).to(device)
+
+        load_model_state(hyperpartisan_model,
+                         hyperpartisan_model_checkpoint_path, device)
+        load_model_state(joint_model, joint_model_checkpoint_path, device)
+
+    print('Loading model state...Done')
+
+    return hyperpartisan_model, joint_model
 
 
 def predict(config):
@@ -168,45 +296,18 @@ def predict(config):
         total_embedding_dim += Constants.GLOVE_EMBEDDING_DIMENSION
 
     device = torch.device('cpu')
-    hyperpartisan_model = JointModel(embedding_dim=total_embedding_dim,
-                                     hidden_dim=config.hidden_dim,
-                                     num_layers=config.num_layers,
-                                     sent_encoder_dropout_rate=0,
-                                     doc_encoder_dropout_rate=0,
-                                     output_dropout_rate=0,
-                                     device=device,
-                                     skip_connection=config.skip_connection,
-                                     include_article_features=config.include_article_features)
 
-    # Load the model if found
-    if os.path.isfile(config.hyperpartisan_model_checkpoint):
-        checkpoint = torch.load(config.hyperpartisan_model_checkpoint)
-        hyperpartisan_model.load_state_dict(checkpoint['model_state_dict'])
-        print('Loaded the model')
-    else:
-        raise Exception('Could not find the hyperpartisan model')
-
-    joint_model = JointModel(embedding_dim=total_embedding_dim,
-                             hidden_dim=config.hidden_dim,
-                             num_layers=config.num_layers,
-                             sent_encoder_dropout_rate=0,
-                             doc_encoder_dropout_rate=0,
-                             output_dropout_rate=0,
-                             device=device,
-                             skip_connection=config.skip_connection,
-                             include_article_features=config.include_article_features)
-
-    # Load the model if found
-    if os.path.isfile(config.joint_model_checkpoint):
-        checkpoint = torch.load(config.joint_model_checkpoint)
-        joint_model.load_state_dict(checkpoint['model_state_dict'])
-        print('Loaded the model')
-    else:
-        raise Exception('Could not find the joint model')
+    hyperpartisan_model, joint_model = initialize_models(config.hyperpartisan_model_checkpoint,
+                                                         config.joint_model_checkpoint,
+                                                         device,
+                                                         config.elmo_model,
+                                                         config.concat_glove,
+                                                         config.model_type)
 
     # Load GloVe vectors
     if config.concat_glove:
-        glove_vectors = utils_helper.load_glove_vectors(config.vector_file_name, config.vector_cache_dir, config.glove_size)
+        glove_vectors = utils_helper.load_glove_vectors(
+            config.vector_file_name, config.vector_cache_dir, config.glove_size)
     else:
         glove_vectors = None
 
@@ -231,12 +332,14 @@ def predict(config):
             hyperpartisan_model,
             joint_model,
             config.article_id,
-            config.sentence_id)
+            config.sentence_id,
+            device)
     else:
-        title_attention_plot(hyperpartisan_validation_dataset, joint_model)
+        title_attention_plot(
+            hyperpartisan_validation_dataset, joint_model, device)
         visualize_article_attention(config.hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader,
                                     joint_model,
-                                    article_id=config.article_id)
+                                    article_id=config.article_id, device=device)
 
 
 if __name__ == '__main__':
@@ -272,6 +375,8 @@ if __name__ == '__main__':
                         help='Whether GloVe vectors have to be concatenated with ELMo vectors for words')
     parser.add_argument('--include_article_features', action='store_true',
                         help='Whether to append handcrafted article features to the hyperpartisan fc layer')
+    parser.add_argument('--model_type', type=str, choices=["ensemble", "single"], default="single",
+                        help='Whether to use an ensemble of models or a single model instant')
 
     config = parser.parse_args()
 

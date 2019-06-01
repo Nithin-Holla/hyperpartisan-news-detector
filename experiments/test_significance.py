@@ -255,6 +255,8 @@ if __name__ == '__main__':
                                                          config.elmo_model,
                                                          config.concat_glove,
                                                          config.model_type)
+    hyperpartisan_model.eval()
+    joint_model.eval()
     
     _, hyperpartisan_validation_dataset = HyperpartisanLoader.get_hyperpartisan_datasets(
         hyperpartisan_dataset_folder=config.hyperpartisan_dataset_folder,

@@ -3,6 +3,7 @@ from os import listdir
 import torch
 from enums.training_mode import TrainingMode
 
+
 class Ensemble(object):
 
 	def __init__(self,
@@ -19,6 +20,7 @@ class Ensemble(object):
 				 ):
 
 		self.models = []
+		self.device = device
 
 		checkpoint_paths = listdir(path_to_models)
 		self.num_models = len(checkpoint_paths)
@@ -44,20 +46,34 @@ class Ensemble(object):
 
 			self.models.append(joint_model)
 
-	def forward(self, x, extra_args, task):
-
+	def forward(self, x, extra_args, task, return_attention=False):
 		if task == TrainingMode.Hyperpartisan:
 
 			predictions = []
-			for model in self.models:
+
+		for i, model in enumerate(self.models):
+			if return_attention:
+				pred, word_attention, sentence_attention = model.forward(x, extra_args, task, return_attention=True)
+				if i == 0:
+					word_attentions = word_attention.unsqueeze(0)
+					sentence_attentions = sentence_attention.unsqueeze(0)
+				else:
+					word_attentions = torch.cat((word_attentions, word_attention.unsqueeze(0)), dim=0)
+					sentence_attentions = torch.cat((sentence_attentions, sentence_attention.unsqueeze(0)), dim=0)
+			else:
 				pred = model.forward(x, extra_args, task)
+			
 				predictions.append(pred[0])
 
-			return sum(predictions)/self.num_models
+		result_predictions = sum(predictions)/self.num_models
 
 		elif task == TrainingMode.Metaphor:
 
 			predictions = []
+		if return_attention:
+			return result_predictions, word_attentions.sum(dim=0).squeeze(), sentence_attentions.sum(dim=0).squeeze()
+		else:
+			return result_predictions
 			for i, model in enumerate(self.models):
 
 				if not i:
