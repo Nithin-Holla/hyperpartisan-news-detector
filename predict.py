@@ -133,8 +133,6 @@ def visualize_article_attention(hyperpartisan_dataset_folder, hyperpartisan_vali
     pred, word_attn2, sent_attn2, article_num_sent, article_sent_lengths, article_txt = get_attention_weights(
         hyperpartisan_dataset_folder, hyperpartisan_validation_dataloader, model2, article_id, device)
 
-    print(word_attn1.shape)
-    print(sent_attn1.shape)
     word_attn = word_attn1 - word_attn2
     min_word_attn = np.amin(word_attn, axis=1, keepdims=True)
     range_word_attn = np.amax(word_attn, axis=1, keepdims=True) - min_word_attn
@@ -205,9 +203,10 @@ def show_sentence_attention_difference(hyperpartisan_dataset_folder, hyperpartis
     normalized_weights = (((subtracted_word_attention - min_v) /
                            range_v)[:len(sentence_labels)])[np.newaxis, :]
 
+    sns.set(font_scale=1.4)
     sns.heatmap(normalized_weights, cmap='Blues', yticklabels=False, xticklabels=sentence_labels, cbar=False,
                 square=True)
-    plt.xticks(rotation=90)
+    plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
 
