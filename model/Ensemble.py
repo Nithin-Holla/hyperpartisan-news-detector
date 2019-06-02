@@ -67,7 +67,7 @@ class Ensemble(object):
 
 			result_predictions = sum(predictions)/self.num_models
 			if return_attention:
-				return result_predictions, word_attentions.sum(dim=0).squeeze(), sentence_attentions.sum(dim=0).squeeze()
+				return result_predictions, word_attentions.mean(dim=0).squeeze(), sentence_attentions.mean(dim=0).squeeze()
 			else:
 				return result_predictions
 
